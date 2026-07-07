@@ -1,0 +1,79 @@
+============================================================
+ADO MCP Server - Setup Guide
+============================================================
+
+Prerequisites
+-------------
+- Node.js 18+ installed
+- VS Code with GitHub Copilot Chat
+
+Steps
+-----
+
+1. Clone the repo
+   git clone https://github.com/ensonokrish/ado-mcp-server.git
+   cd ado-mcp-server
+
+2. Install dependencies & build
+   npm install
+   npm approve-scripts keytar
+   npm run build
+
+3. Add MCP config to your workspace
+   Create .vscode/mcp.json in any workspace where you want to use it:
+
+   {
+     "servers": {
+       "ado-mcp-server": {
+         "type": "stdio",
+         "command": "node",
+         "args": ["C:/Repos/ado-mcp-server/dist/index.js"]
+       }
+     }
+   }
+
+   (Update the path to where you cloned the repo)
+
+4. Generate an ADO PAT
+   - Go to https://dev.azure.com/DFIN/_usersSettings/tokens
+   - Create token with scopes:
+     - Work Items: Read, Write, Manage
+     - Project and Team: Read
+
+5. First connection (one-time)
+   In terminal, from the cloned repo folder, run:
+
+   echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"connect","arguments":{"organization":"DFIN","pat":"YOUR_PAT","project":"SRE Operations and BAU","save_as":"dfin"}}}' | node dist/index.js
+
+   This saves credentials to your system keychain.
+   PAT never needs to be entered again.
+
+6. Use in VS Code Chat
+   - Ctrl+Shift+P -> "MCP: List Servers" -> Start ado-mcp-server
+   - In chat: "connect with profile dfin"
+   - Then: "show my work items"
+
+============================================================
+Available Tools
+============================================================
+
+Tool                 Description
+----                 -----------
+connect              Authenticate (profile or explicit credentials)
+list_profiles        Show saved profiles
+my_work_items        Get items assigned to you
+query_work_items     Run WIQL queries
+get_work_item        Get item details by ID
+create_work_item     Create new items
+update_work_item     Update existing items
+get_work_item_types  List available types
+get_iterations       List sprints
+disconnect           End session
+
+============================================================
+Notes
+============================================================
+- PAT is stored in your system keychain (Windows Credential Manager)
+- No secrets are stored in files
+- After first connection, use profile_name=dfin to reconnect
+- Multi-project support: pass project parameter to any tool
