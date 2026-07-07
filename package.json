@@ -1,0 +1,37 @@
+{
+  "name": "ado-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for Azure DevOps Boards - work item management",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "clean": "rimraf dist"
+  },
+  "keywords": [
+    "mcp",
+    "azure-devops",
+    "ado",
+    "work-items"
+  ],
+  "license": "UNLICENSED",
+  "private": true,
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "keytar": "^7.9.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "rimraf": "^5.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.0"
+  },
+  "allowScripts": {
+    "keytar@7.9.0": true
+  }
+}
