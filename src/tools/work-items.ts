@@ -124,15 +124,15 @@ export function registerWorkItemTools(server: McpServer): void {
         // Validate required fields for Engineering Story
         if (type === "Engineering Story") {
           const missing: string[] = [];
-          if (!requestor) missing.push("requestor (who is requesting this work, e.g., 'Srinath Ekbote')");
-          if (!product_name) missing.push("product_name (e.g., 'ActiveDisclosure', 'GAIL', 'Saturn')");
-          if (!assigned_to) missing.push("assigned_to (who will work on this, e.g., 'Srinath Ekbote')");
+          if (!assigned_to) missing.push("assigned_to — Who will work on this? (e.g., 'Srinath Ekbote', 'Hina Ayub', 'Krishnendu Sur')");
+          if (!requestor) missing.push("requestor — Who is requesting this work? (e.g., 'Srinath Ekbote', 'Mohammad Rasheedi')");
+          if (!product_name) missing.push("product_name — Which product? (e.g., 'ActiveDisclosure')");
 
           // Validate product tag is present in tags
           const validProductTags = ["AD", "GAIL", "AWS"];
           const hasProductTag = tags && validProductTags.some((t) => tags.includes(t));
           if (!hasProductTag) {
-            missing.push("product tag in tags field — must include one of: 'AD', 'GAIL', or 'AWS'");
+            missing.push("product tag — Which board swimlane? Must include one of: 'AD', 'GAIL', or 'AWS' in tags");
           }
 
           if (missing.length > 0) {
