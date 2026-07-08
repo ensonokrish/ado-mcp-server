@@ -151,17 +151,53 @@ export function registerQueryTools(server: McpServer): void {
           "System.Tags",
         ]);
 
-        const lines = items.map((wi) => {
-          const f = wi.fields;
-          const priority = f["Microsoft.VSTS.Common.Priority"] || "-";
-          return `  [${wi.id}] P${priority} | ${f["System.WorkItemType"]} | ${f["System.State"]} | ${f["System.Title"]}`;
-        });
+        // Group by product tag (AD, GAIL, AWS, Other)
+        const groups: Record<string, typeof items> = {
+          AD: [],
+          GAIL: [],
+          AWS: [],
+          Other: [],
+        };
+
+        for (const wi of items) {
+          const tags = (wi.fields["System.Tags"] as string) || "";
+          if (tags.includes("AD")) {
+            groups["AD"].push(wi);
+          } else if (tags.includes("GAIL")) {
+            groups["GAIL"].push(wi);
+          } else if (tags.includes("AWS")) {
+            groups["AWS"].push(wi);
+          } else {
+            groups["Other"].push(wi);
+          }
+        }
+
+        const sections: string[] = [];
+        for (const [group, groupItems] of Object.entries(groups)) {
+          if (groupItems.length === 0) continue;
+          const stateCount: Record<string, number> = {};
+          for (const wi of groupItems) {
+            const s = (wi.fields["System.State"] as string) || "Unknown";
+            stateCount[s] = (stateCount[s] || 0) + 1;
+          }
+          const stateSummary = Object.entries(stateCount)
+            .map(([s, c]) => `${c} ${s}`)
+            .join(", ");
+
+          const lines = groupItems.map((wi) => {
+            const f = wi.fields;
+            const priority = f["Microsoft.VSTS.Common.Priority"] || "-";
+            return `  [${wi.id}] P${priority} | ${f["System.WorkItemType"]} | ${f["System.State"]} | ${f["System.Title"]}`;
+          });
+
+          sections.push(`=== ${group} (${stateSummary}) ===\n${lines.join("\n")}`);
+        }
 
         return {
           content: [
             {
               type: "text" as const,
-              text: `Your work items (${items.length}):\n\n${lines.join("\n")}`,
+              text: `Your work items (${items.length}):\n\n${sections.join("\n\n")}`,
             },
           ],
         };

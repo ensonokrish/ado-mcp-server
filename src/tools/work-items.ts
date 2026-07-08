@@ -128,6 +128,13 @@ export function registerWorkItemTools(server: McpServer): void {
           if (!product_name) missing.push("product_name (e.g., 'ActiveDisclosure', 'GAIL', 'Saturn')");
           if (!assigned_to) missing.push("assigned_to (who will work on this, e.g., 'Srinath Ekbote')");
 
+          // Validate product tag is present in tags
+          const validProductTags = ["AD", "GAIL", "AWS"];
+          const hasProductTag = tags && validProductTags.some((t) => tags.includes(t));
+          if (!hasProductTag) {
+            missing.push("product tag in tags field — must include one of: 'AD', 'GAIL', or 'AWS'");
+          }
+
           if (missing.length > 0) {
             return {
               content: [
