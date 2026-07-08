@@ -121,6 +121,25 @@ export function registerWorkItemTools(server: McpServer): void {
       if (tags) fields["System.Tags"] = tags;
 
       try {
+        // Validate required fields for Engineering Story
+        if (type === "Engineering Story") {
+          const missing: string[] = [];
+          if (!requestor) missing.push("requestor (who is requesting this work, e.g., 'Srinath Ekbote')");
+          if (!product_name) missing.push("product_name (e.g., 'ActiveDisclosure', 'GAIL', 'Saturn')");
+          if (!assigned_to) missing.push("assigned_to (who will work on this, e.g., 'Srinath Ekbote')");
+
+          if (missing.length > 0) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: `Missing required fields for Engineering Story:\n\n${missing.map((m, i) => `  ${i + 1}. ${m}`).join("\n")}\n\nPlease provide these values to create the work item.`,
+                },
+              ],
+            };
+          }
+        }
+
         const wi = await client.createWorkItem(type, fields, project, parent_id);
 
         return {
