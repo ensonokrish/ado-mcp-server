@@ -19,20 +19,15 @@ Steps
    npm approve-scripts keytar
    npm run build
 
-3. Add MCP config to your workspace
-   Create .vscode/mcp.json in any workspace where you want to use it:
+3. MCP config is auto-generated
+   After build, .vscode/mcp.json is auto-created in this repo with the
+   correct path. No manual editing needed.
 
-   {
-     "servers": {
-       "ado-mcp-server": {
-         "type": "stdio",
-         "command": "node",
-         "args": ["C:/Repos/ado-mcp-server/dist/index.js"]
-       }
-     }
-   }
+   To install the MCP config into another workspace (e.g., dfin-harness-pipelines):
+   npm run install-mcp -- C:\Repos\dfin-harness-pipelines
 
-   (Update the path to where you cloned the repo)
+   This auto-detects the server path based on where you cloned the repo.
+   If mcp.json already exists in the target, it merges without overwriting.
 
 4. Generate an ADO PAT
    - Go to https://dev.azure.com/DFIN/_usersSettings/tokens
@@ -41,11 +36,17 @@ Steps
      - Project and Team: Read
 
 5. First connection (one-time)
-   In terminal, from the cloned repo folder, run:
+   Run the interactive setup wizard:
 
-   echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"connect","arguments":{"organization":"DFIN","pat":"YOUR_PAT","project":"SRE Operations and BAU","save_as":"dfin"}}}' | node dist/index.js
+   npm run first-connect
 
-   This saves credentials to your system keychain.
+   It will prompt you for:
+     1. Organization name   - e.g., 'DFIN'
+     2. Personal Access Token - your ADO PAT
+     3. Default project      - e.g., 'SRE Operations and BAU'
+     4. Profile name         - e.g., 'dfin' (used to reconnect later)
+
+   Credentials are saved to your system keychain.
    PAT never needs to be entered again.
 
 6. Use in VS Code Chat
@@ -77,3 +78,18 @@ Notes
 - No secrets are stored in files
 - After first connection, use profile_name=dfin to reconnect
 - Multi-project support: pass project parameter to any tool
+
+============================================================
+Configuration (config/defaults.json)
+============================================================
+All team defaults are stored in config/defaults.json:
+- Quarter tag, iteration path, area path
+- Feature IDs for parent linking
+- Product tags and required fields
+
+When a new quarter starts:
+1. Update current_quarter (name, year, quarter_tag, iteration_path)
+2. Update features and epics with new Q4 IDs
+3. Commit and push — everyone gets the new defaults automatically
+
+These defaults are auto-applied when creating work items via chat.

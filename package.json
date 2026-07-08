@@ -5,9 +5,13 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
+    "postbuild": "node scripts/setup-mcp.js",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist",
+    "setup": "node scripts/setup-mcp.js",
+    "install-mcp": "node scripts/install-mcp.js",
+    "first-connect": "node scripts/first-connect.js"
   },
   "keywords": [
     "mcp",

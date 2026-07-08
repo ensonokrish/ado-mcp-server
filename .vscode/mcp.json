@@ -2,8 +2,10 @@
   "servers": {
     "ado-mcp-server": {
       "type": "stdio",
-      "command": "C:\\Program Files\\nodejs\\node.exe",
-      "args": ["${workspaceFolder}/dist/index.js"]
+      "command": "node",
+      "args": [
+        "C:/Repos/ado-mcp-server/dist/index.js"
+      ]
     }
   }
 }

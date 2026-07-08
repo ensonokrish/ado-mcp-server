@@ -226,4 +226,74 @@ export function registerQueryTools(server: McpServer): void {
       }
     }
   );
+
+  /**
+   * List active features and epics from the board (dynamic).
+   */
+  server.tool(
+    "list_features",
+    "Dynamically fetch active Epics and Features from the Ensono-AD board for the current quarter. Use this to find the correct parent_id when creating work items.",
+    {
+      type: z
+        .enum(["Feature", "Epic", "both"])
+        .optional()
+        .describe("Filter by type. Default: both"),
+      project: z.string().optional().describe("Project name (uses default if not specified)"),
+    },
+    async ({ type, project }) => {
+      const client = requireClient();
+      const typeFilter = type || "both";
+
+      let typeClause = "";
+      if (typeFilter === "Feature") {
+        typeClause = "AND [System.WorkItemType] = 'Feature'";
+      } else if (typeFilter === "Epic") {
+        typeClause = "AND [System.WorkItemType] = 'Epic'";
+      } else {
+        typeClause = "AND ([System.WorkItemType] = 'Feature' OR [System.WorkItemType] = 'Epic')";
+      }
+
+      const wiql = `SELECT [System.Id], [System.Title], [System.State], [System.WorkItemType] FROM WorkItems WHERE [System.AreaPath] UNDER 'SRE Operations and BAU\\Cloud Operations\\Ops\\Ensono - AD' ${typeClause} AND [System.State] <> 'Closed' AND [System.State] <> 'Removed' ORDER BY [System.WorkItemType] DESC, [System.Title] ASC`;
+
+      try {
+        const result = await client.queryByWiql(wiql, project, 100);
+        if (result.workItems.length === 0) {
+          return {
+            content: [{ type: "text" as const, text: "No active features/epics found." }],
+          };
+        }
+
+        const ids = result.workItems.map((wi) => wi.id);
+        const items = await client.getWorkItems(ids, project, [
+          "System.Id",
+          "System.Title",
+          "System.State",
+          "System.WorkItemType",
+        ]);
+
+        const lines = items.map((wi) => {
+          const f = wi.fields;
+          return `  [${wi.id}] ${f["System.WorkItemType"]} | ${f["System.State"]} | ${f["System.Title"]}`;
+        });
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Active Epics & Features (${items.length}):\n\n${lines.join("\n")}`,
+            },
+          ],
+        };
+      } catch (err) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error: ${err instanceof Error ? err.message : String(err)}`,
+            },
+          ],
+        };
+      }
+    }
+  );
 }
