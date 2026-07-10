@@ -101,3 +101,32 @@ When a new quarter starts:
 3. Commit and push — everyone gets the new defaults automatically
 
 These defaults are auto-applied when creating work items via chat.
+
+============================================================
+Security Posture
+============================================================
+Designed security-first for regulated financial services (DFIN).
+
+1. OS Keychain Credentials
+   PAT stored exclusively in Windows Credential Manager (via keytar).
+   Never written to disk, environment variables, or logs.
+   Only the last 4 characters are ever displayed in audit logs.
+
+2. Prompt-Injection Defence
+   All tool responses are scanned by scrubToolResponse() before
+   reaching the LLM. Patterns like "ignore all previous instructions",
+   HTML injection, script tags, and system prompt overrides are
+   detected and replaced with a safe redaction message.
+   Source: src/security/scrub.ts
+
+3. Full Audit Trail
+   Every tool invocation is logged to logs/audit.log — timestamp,
+   tool name, redacted arguments, success/failure, and execution time.
+   10 MB x 10 rotation files. Complete traceability for compliance.
+   Source: src/security/audit.ts
+
+4. Scoped PAT Permissions
+   PAT should be created with minimum required scopes:
+   - Work Items: Read, Write, Manage
+   - Project and Team: Read
+   No repo, pipeline, or admin access needed.
