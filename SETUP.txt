@@ -51,8 +51,16 @@ Steps
 
 6. Use in VS Code Chat
    - Ctrl+Shift+P -> "MCP: List Servers" -> Start ado-mcp-server
-   - In chat: "connect with profile dfin"
-   - Then: "show my work items"
+   - In chat, first connect to ADO:
+     "connect with profile dfin"
+   - Then you can query, create, update work items:
+     "show my work items"
+     "create a story for..."
+     "close ticket 487834"
+
+   NOTE: You must run "connect with profile dfin" once per chat session.
+   The MCP server needs to authenticate before any other tool will work.
+   If you get "Not connected" errors, run connect again.
 
 ============================================================
 Available Tools
