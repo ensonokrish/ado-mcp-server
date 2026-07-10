@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getActiveClient } from "./connect.js";
+import { scrubToolResponse, logAudit } from "../security/index.js";
 
 function requireClient() {
   const client = getActiveClient();

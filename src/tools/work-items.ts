@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getActiveClient } from "./connect.js";
+import { scrubToolResponse, logAudit } from "../security/index.js";
 
 function requireClient() {
   const client = getActiveClient();
@@ -25,7 +26,9 @@ function formatWorkItem(wi: { id: number; fields: Record<string, unknown> }): st
   ];
 
   if (f["System.Description"]) {
-    lines.push(`Description: ${f["System.Description"]}`);
+    // Scrub description for potential injection patterns
+    const { text } = scrubToolResponse(String(f["System.Description"]));
+    lines.push(`Description: ${text}`);
   }
 
   return lines.join("\n");
@@ -47,13 +50,29 @@ export function registerWorkItemTools(server: McpServer): void {
         .describe("Level of detail to return"),
     },
     async ({ id, project, expand }) => {
+      const startTime = Date.now();
       const client = requireClient();
       try {
         const wi = await client.getWorkItem(id, project, expand);
+        logAudit({
+          timestamp: new Date().toISOString(),
+          tool: "get_work_item",
+          arguments: { id, project, expand },
+          success: true,
+          durationMs: Date.now() - startTime,
+        });
         return {
           content: [{ type: "text" as const, text: formatWorkItem(wi) }],
         };
       } catch (err) {
+        logAudit({
+          timestamp: new Date().toISOString(),
+          tool: "get_work_item",
+          arguments: { id, project, expand },
+          success: false,
+          error: err instanceof Error ? err.message : String(err),
+          durationMs: Date.now() - startTime,
+        });
         return {
           content: [
             {
@@ -147,7 +166,16 @@ export function registerWorkItemTools(server: McpServer): void {
           }
         }
 
+        const startTime = Date.now();
         const wi = await client.createWorkItem(type, fields, project, parent_id);
+
+        logAudit({
+          timestamp: new Date().toISOString(),
+          tool: "create_work_item",
+          arguments: { type, title, project, assigned_to, tags, parent_id },
+          success: true,
+          durationMs: Date.now() - startTime,
+        });
 
         return {
           content: [
@@ -158,6 +186,14 @@ export function registerWorkItemTools(server: McpServer): void {
           ],
         };
       } catch (err) {
+        logAudit({
+          timestamp: new Date().toISOString(),
+          tool: "create_work_item",
+          arguments: { type, title, project, assigned_to, tags, parent_id },
+          success: false,
+          error: err instanceof Error ? err.message : String(err),
+          durationMs: Date.now() - Date.now(),
+        });
         return {
           content: [
             {
