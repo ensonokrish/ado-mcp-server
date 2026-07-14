@@ -57,10 +57,10 @@ export function isCacheLoaded(): boolean {
  * Load historical data from ADO board on connect.
  */
 export async function loadHistoricalData(client: AdoClient, project?: string): Promise<string> {
-  const areaPath = getAreaPath();
+  const areaPath = getAreaPath() || project;
 
   if (!areaPath) {
-    return "Skipped — no area_path configured in config/defaults.json";
+    return "Skipped — no area_path or project available";
   }
 
   try {

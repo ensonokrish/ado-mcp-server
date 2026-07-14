@@ -138,7 +138,7 @@ export function registerConnectTools(server: McpServer): void {
 
       // Load board context (historical data)
       let boardContext = "";
-      const configAreaPath = getAreaPath();
+      const configAreaPath = getAreaPath() || defaultProject;
       if (defaultProject && configAreaPath) {
         try {
           const areaPath = configAreaPath;
