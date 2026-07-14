@@ -2,8 +2,8 @@ import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getActiveClient } from "./connect.js";
 import { scrubToolResponse, logAudit } from "../security/index.js";
-import { spellCheck, isCacheLoaded, suggestFeatureFromCache, suggestAssigneeFromCache, suggestProductTag, findDuplicates } from "../intelligence/index.js";
-import { getProductTags, loadConfig } from "../config/index.js";
+import { spellCheck, isCacheLoaded, suggestFeatureFromCache, suggestAssigneeFromCache, suggestProductTag, findDuplicates, getDetectedProductTags, getDetectedIteration } from "../intelligence/index.js";
+import { getProductTags, loadConfig, getStoryType } from "../config/index.js";
 
 function requireClient() {
   const client = getActiveClient();
@@ -94,7 +94,7 @@ export function registerWorkItemTools(server: McpServer): void {
     "create_work_item",
     "Create a new work item (Task, Bug, User Story, Epic, etc.).",
     {
-      type: z.string().describe("Work item type (e.g., 'Task', 'Bug', 'User Story', 'Epic', 'Engineering Story')"),
+      type: z.string().describe("Work item type (e.g., 'Task', 'Bug', 'User Story', 'Product Backlog Item', 'Epic', 'Feature')"),
       title: z.string().describe("Title of the work item"),
       project: z.string().optional().describe("Project name (uses default if not specified)"),
       description: z.string().optional().describe("Description/details (HTML supported)"),
@@ -151,18 +151,18 @@ export function registerWorkItemTools(server: McpServer): void {
       if (tags) fields["System.Tags"] = tags;
 
       try {
-        // Validate required fields for Engineering Story
-        if (type === "Engineering Story") {
+        // Validate required fields for story-level items (dynamic type detection)
+        if (type === getStoryType()) {
           const missing: string[] = [];
-          if (!assigned_to) missing.push("assigned_to — Who will work on this? (e.g., 'Srinath Ekbote', 'Hina Ayub', 'Krishnendu Sur')");
-          if (!requestor) missing.push("requestor — Who is requesting this work? (e.g., 'Srinath Ekbote', 'Mohammad Rasheedi')");
-          if (!product_name) missing.push(`product_name — Which product? (e.g., '${loadConfig()?.required_fields?.product_name || "your product"}')`);
+          if (!assigned_to) missing.push("assigned_to — Who will work on this?");
+          if (!requestor) missing.push("requestor — Who is requesting this work?");
+          if (!product_name) missing.push(`product_name — Which product?`);
 
-          // Validate product tag is present in tags
-          const validProductTags = getProductTags();
+          // Validate product tag — use config tags if available, else dynamically detected tags
+          const validProductTags = getProductTags().length > 0 ? getProductTags() : getDetectedProductTags();
           const hasProductTag = validProductTags.length === 0 || (tags && validProductTags.some((t) => tags.includes(t)));
-          if (!hasProductTag) {
-            missing.push(`product tag — Which board swimlane? Must include one of: ${validProductTags.map((t) => `'${t}'`).join(", ")} in tags`);
+          if (!hasProductTag && validProductTags.length > 0) {
+            missing.push(`product tag — Must include one of: ${validProductTags.slice(0, 10).map((t) => `'${t}'`).join(", ")} in tags`);
           }
 
           if (missing.length > 0) {
@@ -170,7 +170,7 @@ export function registerWorkItemTools(server: McpServer): void {
               content: [
                 {
                   type: "text" as const,
-                  text: `Missing required fields for Engineering Story:\n\n${missing.map((m, i) => `  ${i + 1}. ${m}`).join("\n")}\n\nPlease provide these values to create the work item.`,
+                  text: `Missing required fields for ${getStoryType()}:\n\n${missing.map((m, i) => `  ${i + 1}. ${m}`).join("\n")}\n\nPlease provide these values to create the work item.`,
                 },
               ],
             };

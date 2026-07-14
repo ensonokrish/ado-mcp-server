@@ -103,7 +103,7 @@ export function registerQueryTools(server: McpServer): void {
    */
   server.tool(
     "my_work_items",
-    "Get work items assigned to the current user. IMPORTANT: Before fetching, ask the user which type they want to see: 'Engineering Story', 'Feature', 'Epic', 'Task', 'Bug', or 'all'. Pass the chosen type in the 'type' parameter (omit for all).",
+    "Get work items assigned to the current user. IMPORTANT: Before fetching, ask the user which type they want to see (e.g., 'User Story', 'Product Backlog Item', 'Feature', 'Epic', 'Task', 'Bug', or 'all'). Pass the chosen type in the 'type' parameter (omit for all).",
     {
       project: z.string().optional().describe("Project name (uses default if not specified)"),
       state: z
@@ -113,7 +113,7 @@ export function registerQueryTools(server: McpServer): void {
       type: z
         .string()
         .optional()
-        .describe("Filter by work item type: 'Engineering Story', 'Feature', 'Epic', 'Task', 'Bug'. Omit for all types."),
+        .describe("Filter by work item type (e.g., 'User Story', 'Product Backlog Item', 'Feature', 'Epic', 'Task', 'Bug'). Omit for all types."),
       top: z.number().optional().describe("Maximum results (default: 50)"),
     },
     async ({ project, state, type, top }) => {

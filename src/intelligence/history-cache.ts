@@ -36,6 +36,8 @@ interface HistoricalCache {
   features: FeatureInfo[];
   recentItems: HistoricalItem[];
   assigneePatterns: AssigneeStats[];
+  productTags: string[];
+  currentIteration: { name: string; path: string } | null;
 }
 
 let cache: HistoricalCache = {
@@ -44,6 +46,8 @@ let cache: HistoricalCache = {
   features: [],
   recentItems: [],
   assigneePatterns: [],
+  productTags: [],
+  currentIteration: null,
 };
 
 export function getCache(): HistoricalCache {
@@ -146,6 +150,40 @@ export async function loadHistoricalData(client: AdoClient, project?: string): P
       return { name, totalItems: data.count, keywords: topKeywords };
     });
 
+    // 4. Extract product tags from recent items (most frequent tags)
+    const tagFreq: Record<string, number> = {};
+    for (const item of recentItems) {
+      if (item.tags) {
+        for (const tag of item.tags.split(";").map((t) => t.trim()).filter(Boolean)) {
+          tagFreq[tag] = (tagFreq[tag] || 0) + 1;
+        }
+      }
+    }
+    const productTags = Object.entries(tagFreq)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 20)
+      .map(([tag]) => tag);
+
+    // 5. Detect current iteration from project's iterations
+    let currentIteration: { name: string; path: string } | null = null;
+    try {
+      const iterations = await client.getIterations(project);
+      const now = new Date();
+      for (const iter of iterations) {
+        const attrs = iter.attributes as { startDate?: string; finishDate?: string } | undefined;
+        if (attrs?.startDate && attrs?.finishDate) {
+          const start = new Date(attrs.startDate);
+          const end = new Date(attrs.finishDate);
+          if (now >= start && now <= end) {
+            currentIteration = { name: iter.name, path: iter.path };
+            break;
+          }
+        }
+      }
+    } catch {
+      // Non-critical — iteration detection is best-effort
+    }
+
     // Update cache
     cache = {
       loaded: true,
@@ -153,6 +191,8 @@ export async function loadHistoricalData(client: AdoClient, project?: string): P
       features,
       recentItems,
       assigneePatterns,
+      productTags,
+      currentIteration,
     };
 
     return `Loaded ${features.length} features, ${recentItems.length} recent items, ${assigneePatterns.length} team members`;
@@ -216,4 +256,18 @@ export function suggestAssigneeFromCache(title: string): { name: string; confide
   }
 
   return undefined;
+}
+
+/**
+ * Get dynamically detected product tags from recent work items.
+ */
+export function getDetectedProductTags(): string[] {
+  return cache.productTags;
+}
+
+/**
+ * Get the dynamically detected current iteration.
+ */
+export function getDetectedIteration(): { name: string; path: string } | null {
+  return cache.currentIteration;
 }

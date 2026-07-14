@@ -7,7 +7,7 @@ import {
   listProfiles,
   deleteProfile,
 } from "../auth/credentials.js";
-import { loadHistoricalData } from "../intelligence/index.js";
+import { loadHistoricalData, getDetectedProductTags, getDetectedIteration } from "../intelligence/index.js";
 import { getAreaPath, loadConfig, setActiveOrg, clearConfigCache, detectStoryType, getStoryType } from "../config/index.js";
 
 /** In-memory session state */
@@ -187,12 +187,23 @@ export function registerConnectTools(server: McpServer): void {
         }
       }
 
+      // Build detection summary
+      const detectedIter = getDetectedIteration();
+      const detectedTags = getDetectedProductTags();
+      let detectionInfo = `\n  Story type: ${getStoryType()}`;
+      if (detectedIter) {
+        detectionInfo += `\n  Current sprint: ${detectedIter.name}`;
+      }
+      if (detectedTags.length > 0) {
+        detectionInfo += `\n  Top tags: ${detectedTags.slice(0, 8).join(", ")}`;
+      }
+
       const projectList = projects.map((p) => `  - ${p.name}`).join("\n");
       return {
         content: [
           {
             type: "text" as const,
-            text: `Connected to Azure DevOps organization: ${org}\nDefault project: ${defaultProject || "(none)"}\n\nAvailable projects:\n${projectList}${boardContext}${historyStatus}`,
+            text: `Connected to Azure DevOps organization: ${org}\nDefault project: ${defaultProject || "(none)"}\n\nAvailable projects:\n${projectList}${boardContext}${historyStatus}${detectionInfo}`,
           },
         ],
       };

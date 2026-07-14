@@ -3,4 +3,3 @@ dist/
 *.js.map
 .env
 logs/
-config/defaults.json
