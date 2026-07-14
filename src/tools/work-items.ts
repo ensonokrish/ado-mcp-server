@@ -2,6 +2,7 @@ import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getActiveClient } from "./connect.js";
 import { scrubToolResponse, logAudit } from "../security/index.js";
+import { spellCheck, getSuggestions } from "../intelligence/index.js";
 
 function requireClient() {
   const client = getActiveClient();
@@ -124,8 +125,17 @@ export function registerWorkItemTools(server: McpServer): void {
       parent_id,
     }) => {
       const client = requireClient();
+
+      // Spell-check title and description
+      const titleCheck = spellCheck(title);
+      const checkedTitle = titleCheck.corrected;
+      let spellNote = "";
+      if (titleCheck.corrections.length > 0) {
+        spellNote = `\n\n[Auto-corrected: ${titleCheck.corrections.map((c) => `"${c.from}" → "${c.to}"`).join(", ")}]`;
+      }
+
       const fields: Record<string, unknown> = {
-        "System.Title": title,
+        "System.Title": checkedTitle,
       };
 
       if (description) fields["System.Description"] = description;
@@ -181,7 +191,7 @@ export function registerWorkItemTools(server: McpServer): void {
           content: [
             {
               type: "text" as const,
-              text: `Work item created successfully!\n\n${formatWorkItem(wi)}${parent_id ? `\n\nLinked to parent: ${parent_id}` : ""}\n\nURL: ${wi.url}`,
+              text: `Work item created successfully!${spellNote}\n\n${formatWorkItem(wi)}${parent_id ? `\n\nLinked to parent: ${parent_id}` : ""}\n\nURL: ${wi.url}`,
             },
           ],
         };
@@ -314,6 +324,64 @@ export function registerWorkItemTools(server: McpServer): void {
           ],
         };
       }
+    }
+  );
+
+  /**
+   * Suggest defaults for a new work item based on historical patterns.
+   */
+  server.tool(
+    "suggest_defaults",
+    "Analyze a work item title and suggest: parent feature, assignee, product tag, and check for duplicates. Use before creating items.",
+    {
+      title: z.string().describe("The proposed title for the work item"),
+      project: z.string().optional().describe("Project name (uses default if not specified)"),
+    },
+    async ({ title, project }) => {
+      const client = requireClient();
+
+      // Spell-check first
+      const titleCheck = spellCheck(title);
+      const suggestions = await getSuggestions(client, titleCheck.corrected, project);
+
+      const lines: string[] = [];
+
+      if (titleCheck.corrections.length > 0) {
+        lines.push(`Spell corrections: ${titleCheck.corrections.map((c) => `"${c.from}" → "${c.to}"`).join(", ")}`);
+        lines.push(`Corrected title: ${titleCheck.corrected}`);
+        lines.push("");
+      }
+
+      if (suggestions.parentFeature) {
+        lines.push(`Suggested parent: [${suggestions.parentFeature.id}] ${suggestions.parentFeature.name} (confidence: ${suggestions.parentFeature.confidence})`);
+      } else {
+        lines.push("Suggested parent: No match found — please specify manually");
+      }
+
+      if (suggestions.assignee) {
+        lines.push(`Suggested assignee: ${suggestions.assignee.name} (${suggestions.assignee.reason})`);
+      }
+
+      if (suggestions.productTag) {
+        lines.push(`Suggested tag: ${suggestions.productTag}`);
+      }
+
+      if (suggestions.duplicates && suggestions.duplicates.length > 0) {
+        lines.push("");
+        lines.push("⚠ Potential duplicates found:");
+        for (const d of suggestions.duplicates) {
+          lines.push(`  [${d.id}] ${d.title}`);
+        }
+      }
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: lines.length > 0 ? lines.join("\n") : "No suggestions available for this title.",
+          },
+        ],
+      };
     }
   );
 }
