@@ -114,3 +114,54 @@ export function getQuarterConfig(): QuarterConfig | undefined {
 export function clearConfigCache(): void {
   configCache = null;
 }
+
+// ── Dynamic story-type detection ──────────────────────────
+
+/**
+ * Known "story-level" type names ordered by preference.
+ * The first match found in the project's available types wins.
+ */
+const STORY_TYPE_CANDIDATES = [
+  "Engineering Story",
+  "Product Backlog Item",
+  "User Story",
+  "Story",
+];
+
+/** Cached story type for the active project. */
+let cachedStoryType: string | null = null;
+
+/**
+ * Detect the story-level work item type for the connected project.
+ * Call once on connect — result is cached for the session.
+ */
+export async function detectStoryType(
+  availableTypes: { name: string }[]
+): Promise<string> {
+  const names = new Set(availableTypes.map((t) => t.name));
+  for (const candidate of STORY_TYPE_CANDIDATES) {
+    if (names.has(candidate)) {
+      cachedStoryType = candidate;
+      return cachedStoryType;
+    }
+  }
+  // Fallback — use the first non-meta type that looks story-like, or default
+  cachedStoryType = "User Story";
+  return cachedStoryType;
+}
+
+/**
+ * Get the detected story-level type. Falls back to 'User Story'
+ * if detectStoryType hasn't been called yet.
+ */
+export function getStoryType(): string {
+  return cachedStoryType || "User Story";
+}
+
+/**
+ * Build a WIQL type filter for story-level items.
+ * Returns e.g. `[System.WorkItemType] = 'User Story'`
+ */
+export function storyTypeFilter(): string {
+  return `[System.WorkItemType] = '${getStoryType()}'`;
+}

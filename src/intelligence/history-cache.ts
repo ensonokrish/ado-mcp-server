@@ -6,6 +6,7 @@
 
 import { AdoClient } from "../api/ado-client.js";
 import { getAreaPath } from "../config/index.js";
+import { getStoryType } from "../config/index.js";
 
 export interface HistoricalItem {
   id: number;
@@ -88,7 +89,7 @@ export async function loadHistoricalData(client: AdoClient, project?: string): P
     // 2. Load recent closed items (last 90 days) to learn patterns
     const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
     const recentResult = await client.queryByWiql(
-      `SELECT [System.Id] FROM WorkItems WHERE [System.AreaPath] UNDER '${areaPath}' AND [System.WorkItemType] = 'Engineering Story' AND [System.ChangedDate] >= '${since}' ORDER BY [System.ChangedDate] DESC`,
+      `SELECT [System.Id] FROM WorkItems WHERE [System.AreaPath] UNDER '${areaPath}' AND [System.WorkItemType] = '${getStoryType()}' AND [System.ChangedDate] >= '${since}' ORDER BY [System.ChangedDate] DESC`,
       project,
       200
     );

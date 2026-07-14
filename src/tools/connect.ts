@@ -8,7 +8,7 @@ import {
   deleteProfile,
 } from "../auth/credentials.js";
 import { loadHistoricalData } from "../intelligence/index.js";
-import { getAreaPath, loadConfig, setActiveOrg, clearConfigCache } from "../config/index.js";
+import { getAreaPath, loadConfig, setActiveOrg, clearConfigCache, detectStoryType, getStoryType } from "../config/index.js";
 
 /** In-memory session state */
 let activeClient: AdoClient | null = null;
@@ -129,6 +129,16 @@ export function registerConnectTools(server: McpServer): void {
       clearConfigCache();
       setActiveOrg(org);
 
+      // Detect the story-level work item type for this project
+      if (defaultProject) {
+        try {
+          const types = await client.getWorkItemTypes(defaultProject);
+          await detectStoryType(types);
+        } catch {
+          // Non-critical — falls back to 'User Story'
+        }
+      }
+
       // Load historical data for intelligence
       let historyStatus = "";
       if (defaultProject) {
@@ -143,15 +153,20 @@ export function registerConnectTools(server: McpServer): void {
         try {
           const areaPath = configAreaPath;
 
-          // Get board column counts
-          const columns = ["New", "Active", "On Hold", "In Review", "Closed"];
+          // Get board column counts — query by State (universal) rather than BoardColumn (process-specific)
+          const columns = ["New", "Active", "Resolved", "Closed"];
           const counts: Record<string, number> = {};
           for (const col of columns) {
             const stateFilter = col === "Closed"
-              ? `[System.State] = 'Closed' AND [Microsoft.VSTS.Common.ClosedDate] >= '${new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]}'`
-              : `[System.BoardColumn] = '${col}' AND [System.State] <> 'Closed' AND [System.State] <> 'Removed'`;
+              ? `[System.State] IN ('Closed', 'Done') AND [Microsoft.VSTS.Common.ClosedDate] >= '${new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]}'`
+              : col === "New"
+              ? `[System.State] IN ('New', 'Approved')`
+              : col === "Active"
+              ? `[System.State] IN ('Active', 'Committed', 'In Progress')`
+              : `[System.State] IN ('Resolved', 'In Review')`;
+            const fullFilter = `${stateFilter} AND [System.State] <> 'Removed'`;
             const result = await client.queryByWiql(
-              `SELECT [System.Id] FROM WorkItems WHERE [System.AreaPath] UNDER '${areaPath}' AND [System.WorkItemType] = 'Engineering Story' AND ${stateFilter}`,
+              `SELECT [System.Id] FROM WorkItems WHERE [System.AreaPath] UNDER '${areaPath}' AND [System.WorkItemType] = '${getStoryType()}' AND ${fullFilter}`,
               defaultProject,
               200
             );
@@ -160,13 +175,13 @@ export function registerConnectTools(server: McpServer): void {
 
           // Get active team members (who has items assigned)
           const activeItems = await client.queryByWiql(
-            `SELECT [System.Id], [System.AssignedTo] FROM WorkItems WHERE [System.AreaPath] UNDER '${areaPath}' AND [System.WorkItemType] = 'Engineering Story' AND [System.State] <> 'Closed' AND [System.State] <> 'Removed' AND [System.AssignedTo] <> ''`,
+            `SELECT [System.Id], [System.AssignedTo] FROM WorkItems WHERE [System.AreaPath] UNDER '${areaPath}' AND [System.WorkItemType] = '${getStoryType()}' AND [System.State] <> 'Closed' AND [System.State] <> 'Removed' AND [System.AssignedTo] <> ''`,
             defaultProject,
             200
           );
 
           const boardName = loadConfig()?.board || defaultProject;
-          boardContext = `\n\nBoard snapshot (${boardName}):\n  New: ${counts["New"]} | Active: ${counts["Active"]} | On Hold: ${counts["On Hold"]} | In Review: ${counts["In Review"]} | Closed (30d): ${counts["Closed"]}\n  Open items: ${activeItems.workItems.length}`;
+          boardContext = `\n\nBoard snapshot (${boardName}):\n  New: ${counts["New"]} | Active: ${counts["Active"]} | Resolved: ${counts["Resolved"]} | Closed (30d): ${counts["Closed"]}\n  Open items: ${activeItems.workItems.length}`;
         } catch {
           // Non-critical — don't fail connection
         }
