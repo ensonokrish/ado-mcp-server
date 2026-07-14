@@ -2,7 +2,7 @@ import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getActiveClient } from "./connect.js";
 import { scrubToolResponse, logAudit } from "../security/index.js";
-import { spellCheck, getSuggestions, isCacheLoaded, suggestFeatureFromCache, suggestAssigneeFromCache, suggestProductTag, findDuplicates } from "../intelligence/index.js";
+import { spellCheck, isCacheLoaded, suggestFeatureFromCache, suggestAssigneeFromCache, suggestProductTag, findDuplicates } from "../intelligence/index.js";
 
 function requireClient() {
   const client = getActiveClient();
@@ -369,18 +369,10 @@ export function registerWorkItemTools(server: McpServer): void {
           lines.push(`Suggested assignee: ${assignee.name} (${assignee.reason})`);
         }
       } else {
-        lines.push("[Using static patterns — connect first for live intelligence]");
+        lines.push("[No historical data — run 'connect' first to load live intelligence]");
         lines.push("");
-
-        const suggestions = await getSuggestions(client, correctedTitle, project);
-        if (suggestions.parentFeature) {
-          lines.push(`Suggested parent: [${suggestions.parentFeature.id}] ${suggestions.parentFeature.name} (confidence: ${suggestions.parentFeature.confidence})`);
-        } else {
-          lines.push("Suggested parent: No match found — please specify manually");
-        }
-        if (suggestions.assignee) {
-          lines.push(`Suggested assignee: ${suggestions.assignee.name} (${suggestions.assignee.reason})`);
-        }
+        lines.push("Suggested parent: Connect first to enable feature matching");
+        lines.push("Suggested assignee: Connect first to enable assignee matching");
       }
 
       const tag = suggestProductTag(correctedTitle);
