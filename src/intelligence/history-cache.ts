@@ -5,6 +5,7 @@
  */
 
 import { AdoClient } from "../api/ado-client.js";
+import { getAreaPath } from "../config/index.js";
 
 export interface HistoricalItem {
   id: number;
@@ -56,7 +57,11 @@ export function isCacheLoaded(): boolean {
  * Load historical data from ADO board on connect.
  */
 export async function loadHistoricalData(client: AdoClient, project?: string): Promise<string> {
-  const areaPath = "SRE Operations and BAU\\Cloud Operations\\Ops\\Ensono - AD";
+  const areaPath = getAreaPath();
+
+  if (!areaPath) {
+    return "Skipped — no area_path configured in config/defaults.json";
+  }
 
   try {
     // 1. Load active features and epics

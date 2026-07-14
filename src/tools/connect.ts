@@ -8,6 +8,7 @@ import {
   deleteProfile,
 } from "../auth/credentials.js";
 import { loadHistoricalData } from "../intelligence/index.js";
+import { getAreaPath, loadConfig } from "../config/index.js";
 
 /** In-memory session state */
 let activeClient: AdoClient | null = null;
@@ -132,9 +133,10 @@ export function registerConnectTools(server: McpServer): void {
 
       // Load board context (historical data)
       let boardContext = "";
-      if (defaultProject) {
+      const configAreaPath = getAreaPath();
+      if (defaultProject && configAreaPath) {
         try {
-          const areaPath = "SRE Operations and BAU\\Cloud Operations\\Ops\\Ensono - AD";
+          const areaPath = configAreaPath;
 
           // Get board column counts
           const columns = ["New", "Active", "On Hold", "In Review", "Closed"];
@@ -158,7 +160,8 @@ export function registerConnectTools(server: McpServer): void {
             200
           );
 
-          boardContext = `\n\nBoard snapshot (Ensono-AD):\n  New: ${counts["New"]} | Active: ${counts["Active"]} | On Hold: ${counts["On Hold"]} | In Review: ${counts["In Review"]} | Closed (30d): ${counts["Closed"]}\n  Open items: ${activeItems.workItems.length}`;
+          const boardName = loadConfig()?.board || defaultProject;
+          boardContext = `\n\nBoard snapshot (${boardName}):\n  New: ${counts["New"]} | Active: ${counts["Active"]} | On Hold: ${counts["On Hold"]} | In Review: ${counts["In Review"]} | Closed (30d): ${counts["Closed"]}\n  Open items: ${activeItems.workItems.length}`;
         } catch {
           // Non-critical — don't fail connection
         }

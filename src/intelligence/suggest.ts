@@ -5,6 +5,7 @@
  */
 
 import { AdoClient } from "../api/ado-client.js";
+import { getAreaPath } from "../config/index.js";
 
 /**
  * Suggest product tag based on title keywords.
@@ -41,8 +42,12 @@ export async function findDuplicates(
 
   if (words.length === 0) return [];
 
+  const areaPath = getAreaPath();
+  const areaFilter = areaPath
+    ? `[System.AreaPath] UNDER '${areaPath}' AND`
+    : "";
   const searchTerms = words.map((w) => `[System.Title] CONTAINS '${w}'`).join(" AND ");
-  const wiql = `SELECT [System.Id], [System.Title], [System.State] FROM WorkItems WHERE [System.AreaPath] UNDER 'SRE Operations and BAU\\Cloud Operations\\Ops\\Ensono - AD' AND [System.WorkItemType] = 'Engineering Story' AND ${searchTerms} AND [System.State] <> 'Removed' ORDER BY [System.ChangedDate] DESC`;
+  const wiql = `SELECT [System.Id], [System.Title], [System.State] FROM WorkItems WHERE ${areaFilter} [System.WorkItemType] = 'Engineering Story' AND ${searchTerms} AND [System.State] <> 'Removed' ORDER BY [System.ChangedDate] DESC`;
 
   try {
     const result = await client.queryByWiql(wiql, project, 5);

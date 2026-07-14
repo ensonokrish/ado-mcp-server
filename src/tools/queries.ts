@@ -2,6 +2,7 @@ import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getActiveClient } from "./connect.js";
 import { scrubToolResponse, logAudit } from "../security/index.js";
+import { getAreaPath } from "../config/index.js";
 
 function requireClient() {
   const client = getActiveClient();
@@ -290,7 +291,12 @@ export function registerQueryTools(server: McpServer): void {
         typeClause = "AND ([System.WorkItemType] = 'Feature' OR [System.WorkItemType] = 'Epic')";
       }
 
-      const wiql = `SELECT [System.Id], [System.Title], [System.State], [System.WorkItemType] FROM WorkItems WHERE [System.AreaPath] UNDER 'SRE Operations and BAU\\Cloud Operations\\Ops\\Ensono - AD' ${typeClause} AND [System.State] <> 'Closed' AND [System.State] <> 'Removed' ORDER BY [System.WorkItemType] DESC, [System.Title] ASC`;
+      const areaPath = getAreaPath();
+      const areaFilter = areaPath
+        ? `[System.AreaPath] UNDER '${areaPath}'`
+        : `[System.TeamProject] = '${project || ""}'`;
+
+      const wiql = `SELECT [System.Id], [System.Title], [System.State], [System.WorkItemType] FROM WorkItems WHERE ${areaFilter} ${typeClause} AND [System.State] <> 'Closed' AND [System.State] <> 'Removed' ORDER BY [System.WorkItemType] DESC, [System.Title] ASC`;
 
       try {
         const result = await client.queryByWiql(wiql, project, 100);

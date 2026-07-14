@@ -3,6 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getActiveClient } from "./connect.js";
 import { scrubToolResponse, logAudit } from "../security/index.js";
 import { spellCheck, isCacheLoaded, suggestFeatureFromCache, suggestAssigneeFromCache, suggestProductTag, findDuplicates } from "../intelligence/index.js";
+import { getProductTags, loadConfig } from "../config/index.js";
 
 function requireClient() {
   const client = getActiveClient();
@@ -155,13 +156,13 @@ export function registerWorkItemTools(server: McpServer): void {
           const missing: string[] = [];
           if (!assigned_to) missing.push("assigned_to — Who will work on this? (e.g., 'Srinath Ekbote', 'Hina Ayub', 'Krishnendu Sur')");
           if (!requestor) missing.push("requestor — Who is requesting this work? (e.g., 'Srinath Ekbote', 'Mohammad Rasheedi')");
-          if (!product_name) missing.push("product_name — Which product? (e.g., 'ActiveDisclosure')");
+          if (!product_name) missing.push(`product_name — Which product? (e.g., '${loadConfig()?.required_fields?.product_name || "your product"}')`);
 
           // Validate product tag is present in tags
-          const validProductTags = ["AD", "GAIL", "AWS"];
-          const hasProductTag = tags && validProductTags.some((t) => tags.includes(t));
+          const validProductTags = getProductTags();
+          const hasProductTag = validProductTags.length === 0 || (tags && validProductTags.some((t) => tags.includes(t)));
           if (!hasProductTag) {
-            missing.push("product tag — Which board swimlane? Must include one of: 'AD', 'GAIL', or 'AWS' in tags");
+            missing.push(`product tag — Which board swimlane? Must include one of: ${validProductTags.map((t) => `'${t}'`).join(", ")} in tags`);
           }
 
           if (missing.length > 0) {

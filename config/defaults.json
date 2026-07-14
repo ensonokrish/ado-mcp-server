@@ -1,4 +1,5 @@
 {
+  "_comment": "Customize this file for your organization. All values are optional — if omitted, the server runs in generic mode.",
   "organization": "DFIN",
   "project": "SRE Operations and BAU",
   "board": "Ensono-AD",
