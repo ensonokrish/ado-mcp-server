@@ -8,7 +8,7 @@ import {
   deleteProfile,
 } from "../auth/credentials.js";
 import { loadHistoricalData, getDetectedProductTags, getDetectedIteration } from "../intelligence/index.js";
-import { getAreaPath, loadConfig, setActiveOrg, clearConfigCache, detectStoryType, getStoryType } from "../config/index.js";
+import { getAreaPath, setActiveOrg, clearConfigCache, detectStoryType, getStoryType } from "../config/index.js";
 
 /** In-memory session state */
 let activeClient: AdoClient | null = null;
@@ -180,7 +180,7 @@ export function registerConnectTools(server: McpServer): void {
             200
           );
 
-          const boardName = loadConfig()?.board || defaultProject;
+          const boardName = defaultProject;
           boardContext = `\n\nBoard snapshot (${boardName}):\n  New: ${counts["New"]} | Active: ${counts["Active"]} | Resolved: ${counts["Resolved"]} | Closed (30d): ${counts["Closed"]}\n  Open items: ${activeItems.workItems.length}`;
         } catch {
           // Non-critical — don't fail connection

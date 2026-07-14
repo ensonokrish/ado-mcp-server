@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getActiveClient } from "./connect.js";
-import { scrubToolResponse, logAudit } from "../security/index.js";
+import { scrubToolResponse, logAudit, escapeWiql, validateWiqlSelect } from "../security/index.js";
 import { getAreaPath } from "../config/index.js";
+import { getDetectedProductTags } from "../intelligence/index.js";
 
 function requireClient() {
   const client = getActiveClient();
@@ -34,6 +35,14 @@ export function registerQueryTools(server: McpServer): void {
     },
     async ({ wiql, project, top, fetch_details }) => {
       const client = requireClient();
+
+      // Validate WIQL is a read-only query
+      if (!validateWiqlSelect(wiql)) {
+        return {
+          content: [{ type: "text" as const, text: "Invalid WIQL: query must start with SELECT." }],
+        };
+      }
+
       try {
         const result = await client.queryByWiql(wiql, project, top || 50);
 
@@ -122,13 +131,13 @@ export function registerQueryTools(server: McpServer): void {
       let wiql = `SELECT [System.Id], [System.Title], [System.State], [System.WorkItemType], [System.AssignedTo], [Microsoft.VSTS.Common.Priority] FROM WorkItems WHERE [System.AssignedTo] = @Me`;
 
       if (state) {
-        wiql += ` AND [System.State] = '${state}'`;
+        wiql += ` AND [System.State] = '${escapeWiql(state)}'`;
       } else {
         wiql += ` AND [System.State] <> 'Closed' AND [System.State] <> 'Removed'`;
       }
 
       if (type) {
-        wiql += ` AND [System.WorkItemType] = '${type}'`;
+        wiql += ` AND [System.WorkItemType] = '${escapeWiql(type)}'`;
       }
 
       wiql += ` ORDER BY [Microsoft.VSTS.Common.Priority] ASC, [System.ChangedDate] DESC`;
@@ -153,23 +162,27 @@ export function registerQueryTools(server: McpServer): void {
           "System.Tags",
         ]);
 
-        // Group by product tag (AD, GAIL, AWS, Other)
-        const groups: Record<string, typeof items> = {
-          AD: [],
-          GAIL: [],
-          AWS: [],
-          Other: [],
-        };
+        // Group by detected product tags (dynamic), with "Other" as fallback
+        const detectedTags = getDetectedProductTags().slice(0, 10);
+        const groups: Record<string, typeof items> = {};
+        if (detectedTags.length > 0) {
+          for (const tag of detectedTags) {
+            groups[tag] = [];
+          }
+        }
+        groups["Other"] = [];
 
         for (const wi of items) {
           const tags = (wi.fields["System.Tags"] as string) || "";
-          if (tags.includes("AD")) {
-            groups["AD"].push(wi);
-          } else if (tags.includes("GAIL")) {
-            groups["GAIL"].push(wi);
-          } else if (tags.includes("AWS")) {
-            groups["AWS"].push(wi);
-          } else {
+          let matched = false;
+          for (const tag of detectedTags) {
+            if (tags.includes(tag)) {
+              groups[tag].push(wi);
+              matched = true;
+              break;
+            }
+          }
+          if (!matched) {
             groups["Other"].push(wi);
           }
         }
@@ -270,7 +283,7 @@ export function registerQueryTools(server: McpServer): void {
    */
   server.tool(
     "list_features",
-    "Dynamically fetch active Epics and Features from the Ensono-AD board for the current quarter. Use this to find the correct parent_id when creating work items.",
+    "Dynamically fetch active Epics and Features from the project board. Use this to find the correct parent_id when creating work items.",
     {
       type: z
         .enum(["Feature", "Epic", "both"])
@@ -293,8 +306,8 @@ export function registerQueryTools(server: McpServer): void {
 
       const areaPath = getAreaPath();
       const areaFilter = areaPath
-        ? `[System.AreaPath] UNDER '${areaPath}'`
-        : `[System.TeamProject] = '${project || ""}'`;
+        ? `[System.AreaPath] UNDER '${escapeWiql(areaPath)}'`
+        : `[System.TeamProject] = '${escapeWiql(project || "")}'`;
 
       const wiql = `SELECT [System.Id], [System.Title], [System.State], [System.WorkItemType] FROM WorkItems WHERE ${areaFilter} ${typeClause} AND [System.State] <> 'Closed' AND [System.State] <> 'Removed' ORDER BY [System.WorkItemType] DESC, [System.Title] ASC`;
 

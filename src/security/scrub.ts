@@ -1,9 +1,23 @@
 /**
- * Prompt-Injection Defence
- * Scans tool responses for malicious patterns before they reach the LLM.
- * Patterns like "ignore all previous instructions", HTML injection,
- * and system prompt overrides are detected and replaced with safe redaction.
+ * Prompt-Injection Defence & Input Sanitization
+ * - Scans tool responses for malicious patterns before they reach the LLM.
+ * - Provides WIQL input escaping to prevent query injection.
  */
+
+/**
+ * Escape a value for safe interpolation into a WIQL string literal.
+ * Doubles single quotes to prevent breaking out of WIQL string context.
+ */
+export function escapeWiql(value: string): string {
+  return value.replace(/'/g, "''");
+}
+
+/**
+ * Validate that a WIQL query is a read-only SELECT statement.
+ */
+export function validateWiqlSelect(wiql: string): boolean {
+  return /^\s*(SELECT|WITH)\b/i.test(wiql.trim());
+}
 
 const INJECTION_PATTERNS: { pattern: RegExp; name: string }[] = [
   { pattern: /ignore\s+(all\s+)?previous\s+instructions/i, name: "instruction_override" },
@@ -40,7 +54,9 @@ export function scrubToolResponse(input: string): ScrubResult {
   for (const { pattern, name } of INJECTION_PATTERNS) {
     if (pattern.test(scrubbed)) {
       detections.push(name);
-      scrubbed = scrubbed.replace(pattern, "[REDACTED: potential injection detected]");
+      // Use global flag to replace ALL occurrences, not just the first
+      const globalPattern = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : pattern.flags + 'g');
+      scrubbed = scrubbed.replace(globalPattern, "[REDACTED: potential injection detected]");
     }
   }
 

@@ -6,21 +6,22 @@
 
 import { AdoClient } from "../api/ado-client.js";
 import { getAreaPath, getStoryType } from "../config/index.js";
+import { getDetectedProductTags } from "./history-cache.js";
+import { escapeWiql } from "../security/scrub.js";
 
 /**
  * Suggest product tag based on title keywords.
+ * Uses dynamically detected tags from recent work items.
  */
 export function suggestProductTag(title: string): string | undefined {
   const lower = title.toLowerCase();
+  const detectedTags = getDetectedProductTags();
 
-  if (lower.includes("gail") || lower.includes("ai analysis") || lower.includes("inference") || lower.includes("bedrock")) {
-    return "GAIL";
-  }
-  if (lower.includes("aws") || lower.includes("dais") || lower.includes("cloudwatch") || lower.includes("s3 bucket")) {
-    return "AWS";
-  }
-  if (lower.includes("aks") || lower.includes("release") || lower.includes("pipeline") || lower.includes("wiz") || lower.includes("cert")) {
-    return "AD";
+  // Match title words against known product tags (case-insensitive)
+  for (const tag of detectedTags) {
+    if (lower.includes(tag.toLowerCase())) {
+      return tag;
+    }
   }
 
   return undefined;
@@ -46,7 +47,7 @@ export async function findDuplicates(
   const areaFilter = areaPath
     ? `[System.AreaPath] UNDER '${areaPath}' AND`
     : "";
-  const searchTerms = words.map((w) => `[System.Title] CONTAINS '${w}'`).join(" AND ");
+  const searchTerms = words.map((w) => `[System.Title] CONTAINS '${escapeWiql(w)}'`).join(" AND ");
   const wiql = `SELECT [System.Id], [System.Title], [System.State] FROM WorkItems WHERE ${areaFilter} [System.WorkItemType] = '${getStoryType()}' AND ${searchTerms} AND [System.State] <> 'Removed' ORDER BY [System.ChangedDate] DESC`;
 
   try {

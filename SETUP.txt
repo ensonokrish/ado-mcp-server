@@ -21,18 +21,7 @@ Steps
    npm approve-scripts keytar
    npm run build
 
-3. Configure for your organization (optional)
-   Edit config/defaults.json with your org-specific values:
-   - organization, project, board name
-   - area_path (for board scoping)
-   - current_quarter (tags, iteration path)
-   - product_tags (for board swimlanes)
-   - required_fields (for validation)
-
-   If config/defaults.json is removed, the server runs in generic mode
-   with no enforced defaults — works with any ADO org/project.
-
-4. MCP config is auto-generated
+3. MCP config is auto-generated
    After build, .vscode/mcp.json is auto-created in this repo with the
    correct path. No manual editing needed.
 
@@ -42,13 +31,13 @@ Steps
    This auto-detects the server path based on where you cloned the repo.
    If mcp.json already exists in the target, it merges without overwriting.
 
-5. Generate an ADO PAT
+4. Generate an ADO PAT
    - Go to https://dev.azure.com/<your-org>/_usersSettings/tokens
    - Create token with scopes:
      - Work Items: Read, Write, Manage
      - Project and Team: Read
 
-6. First connection (one-time)
+5. First connection (one-time)
    Run the interactive setup wizard:
 
    npm run first-connect
@@ -62,7 +51,7 @@ Steps
    Credentials are saved to your system keychain.
    PAT never needs to be entered again.
 
-7. Use in VS Code Chat
+6. Use in VS Code Chat
    - Ctrl+Shift+P -> "MCP: List Servers" -> Start ado-mcp-server
    - In chat, first connect to ADO:
      "connect with profile <your-profile>"
@@ -75,7 +64,7 @@ Steps
    The MCP server needs to authenticate before any other tool will work.
    If you get "Not connected" errors, run connect again.
 
-8. Disconnect
+7. Disconnect
    In chat: "disconnect"
    Or from terminal: npm run disconnect
 
@@ -120,34 +109,26 @@ Notes
 - Multi-profile support: save different orgs/projects as profiles
 
 ============================================================
-Configuration (config/defaults.json)
+Dynamic Intelligence
 ============================================================
-All team defaults are stored in config/defaults.json:
-- organization, project, board, area_path
-- current_quarter (tag, iteration path)
-- product_tags (board swimlane grouping)
-- required_fields (validation rules)
+No configuration files needed — everything is auto-detected.
 
-This file is OPTIONAL. Without it, the server works generically.
-With it, the server enforces your team's conventions automatically.
-
-When a new quarter starts:
-1. Update current_quarter (name, year, quarter_tag, iteration_path)
-2. Commit and push — everyone gets the new defaults
-
-============================================================
-Intelligence Features
-============================================================
-On connect, the server loads:
-- Active features/epics from your board
-- Last 90 days of work items
-- Team member assignment patterns
+On connect, the server detects:
+- Story-level work item type (Engineering Story, User Story, PBI, etc.)
+- Current sprint/iteration from project settings
+- Product tags from recent work item history
+- Active features/epics from the board
+- Assignee patterns from the last 90 days of items
+- Board column counts by state
 
 This enables:
 - Auto-suggest parent feature based on title
 - Auto-suggest assignee based on historical patterns
 - Duplicate detection before creating items
 - Spell-check on all titles (auto-corrects common typos)
+- Dynamic product tag validation on create
+
+Works with any ADO process template (Agile, Scrum, CMMI).
 
 ============================================================
 Security Posture

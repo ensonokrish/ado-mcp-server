@@ -1,6 +1,7 @@
 /**
- * Configuration loader.
- * Reads config/defaults.json and provides typed access to settings.
+ * Configuration module.
+ * Manages dynamic detection of project settings (story type, org context).
+ * Optionally reads config/defaults.json if present (for team-specific overrides).
  */
 
 import * as fs from "fs";

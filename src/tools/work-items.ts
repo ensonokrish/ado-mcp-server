@@ -3,7 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getActiveClient } from "./connect.js";
 import { scrubToolResponse, logAudit } from "../security/index.js";
 import { spellCheck, isCacheLoaded, suggestFeatureFromCache, suggestAssigneeFromCache, suggestProductTag, findDuplicates, getDetectedProductTags, getDetectedIteration } from "../intelligence/index.js";
-import { getProductTags, loadConfig, getStoryType } from "../config/index.js";
+import { getStoryType } from "../config/index.js";
 
 function requireClient() {
   const client = getActiveClient();
@@ -150,6 +150,7 @@ export function registerWorkItemTools(server: McpServer): void {
       if (priority) fields["Microsoft.VSTS.Common.Priority"] = priority;
       if (tags) fields["System.Tags"] = tags;
 
+      const startTime = Date.now();
       try {
         // Validate required fields for story-level items (dynamic type detection)
         if (type === getStoryType()) {
@@ -158,8 +159,8 @@ export function registerWorkItemTools(server: McpServer): void {
           if (!requestor) missing.push("requestor — Who is requesting this work?");
           if (!product_name) missing.push(`product_name — Which product?`);
 
-          // Validate product tag — use config tags if available, else dynamically detected tags
-          const validProductTags = getProductTags().length > 0 ? getProductTags() : getDetectedProductTags();
+          // Validate product tag — use dynamically detected tags
+          const validProductTags = getDetectedProductTags();
           const hasProductTag = validProductTags.length === 0 || (tags && validProductTags.some((t) => tags.includes(t)));
           if (!hasProductTag && validProductTags.length > 0) {
             missing.push(`product tag — Must include one of: ${validProductTags.slice(0, 10).map((t) => `'${t}'`).join(", ")} in tags`);
@@ -177,7 +178,6 @@ export function registerWorkItemTools(server: McpServer): void {
           }
         }
 
-        const startTime = Date.now();
         const wi = await client.createWorkItem(type, fields, project, parent_id);
 
         logAudit({
@@ -203,7 +203,7 @@ export function registerWorkItemTools(server: McpServer): void {
           arguments: { type, title, project, assigned_to, tags, parent_id },
           success: false,
           error: err instanceof Error ? err.message : String(err),
-          durationMs: Date.now() - Date.now(),
+          durationMs: Date.now() - startTime,
         });
         return {
           content: [
