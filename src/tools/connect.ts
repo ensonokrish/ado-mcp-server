@@ -7,6 +7,7 @@ import {
   listProfiles,
   deleteProfile,
 } from "../auth/credentials.js";
+import { loadHistoricalData } from "../intelligence/index.js";
 
 /** In-memory session state */
 let activeClient: AdoClient | null = null;
@@ -122,12 +123,53 @@ export function registerConnectTools(server: McpServer): void {
       activeOrg = org;
       activeProject = defaultProject || null;
 
+      // Load historical data for intelligence
+      let historyStatus = "";
+      if (defaultProject) {
+        const result = await loadHistoricalData(client, defaultProject);
+        historyStatus = `\n  Intelligence: ${result}`;
+      }
+
+      // Load board context (historical data)
+      let boardContext = "";
+      if (defaultProject) {
+        try {
+          const areaPath = "SRE Operations and BAU\\Cloud Operations\\Ops\\Ensono - AD";
+
+          // Get board column counts
+          const columns = ["New", "Active", "On Hold", "In Review", "Closed"];
+          const counts: Record<string, number> = {};
+          for (const col of columns) {
+            const stateFilter = col === "Closed"
+              ? `[System.State] = 'Closed' AND [Microsoft.VSTS.Common.ClosedDate] >= '${new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]}'`
+              : `[System.BoardColumn] = '${col}' AND [System.State] <> 'Closed' AND [System.State] <> 'Removed'`;
+            const result = await client.queryByWiql(
+              `SELECT [System.Id] FROM WorkItems WHERE [System.AreaPath] UNDER '${areaPath}' AND [System.WorkItemType] = 'Engineering Story' AND ${stateFilter}`,
+              defaultProject,
+              200
+            );
+            counts[col] = result.workItems.length;
+          }
+
+          // Get active team members (who has items assigned)
+          const activeItems = await client.queryByWiql(
+            `SELECT [System.Id], [System.AssignedTo] FROM WorkItems WHERE [System.AreaPath] UNDER '${areaPath}' AND [System.WorkItemType] = 'Engineering Story' AND [System.State] <> 'Closed' AND [System.State] <> 'Removed' AND [System.AssignedTo] <> ''`,
+            defaultProject,
+            200
+          );
+
+          boardContext = `\n\nBoard snapshot (Ensono-AD):\n  New: ${counts["New"]} | Active: ${counts["Active"]} | On Hold: ${counts["On Hold"]} | In Review: ${counts["In Review"]} | Closed (30d): ${counts["Closed"]}\n  Open items: ${activeItems.workItems.length}`;
+        } catch {
+          // Non-critical — don't fail connection
+        }
+      }
+
       const projectList = projects.map((p) => `  - ${p.name}`).join("\n");
       return {
         content: [
           {
             type: "text" as const,
-            text: `Connected to Azure DevOps organization: ${org}\nDefault project: ${defaultProject || "(none)"}\n\nAvailable projects:\n${projectList}`,
+            text: `Connected to Azure DevOps organization: ${org}\nDefault project: ${defaultProject || "(none)"}\n\nAvailable projects:\n${projectList}${boardContext}${historyStatus}`,
           },
         ],
       };

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getActiveClient } from "./connect.js";
 import { scrubToolResponse, logAudit } from "../security/index.js";
-import { spellCheck, getSuggestions } from "../intelligence/index.js";
+import { spellCheck, getSuggestions, isCacheLoaded, suggestFeatureFromCache, suggestAssigneeFromCache, suggestProductTag, findDuplicates } from "../intelligence/index.js";
 
 function requireClient() {
   const client = getActiveClient();
@@ -342,35 +342,59 @@ export function registerWorkItemTools(server: McpServer): void {
 
       // Spell-check first
       const titleCheck = spellCheck(title);
-      const suggestions = await getSuggestions(client, titleCheck.corrected, project);
+      const correctedTitle = titleCheck.corrected;
 
       const lines: string[] = [];
 
       if (titleCheck.corrections.length > 0) {
         lines.push(`Spell corrections: ${titleCheck.corrections.map((c) => `"${c.from}" → "${c.to}"`).join(", ")}`);
-        lines.push(`Corrected title: ${titleCheck.corrected}`);
+        lines.push(`Corrected title: ${correctedTitle}`);
         lines.push("");
       }
 
-      if (suggestions.parentFeature) {
-        lines.push(`Suggested parent: [${suggestions.parentFeature.id}] ${suggestions.parentFeature.name} (confidence: ${suggestions.parentFeature.confidence})`);
+      // Use cache-based intelligence if available, fallback to static patterns
+      if (isCacheLoaded()) {
+        lines.push("[Using live board data for suggestions]");
+        lines.push("");
+
+        const feature = suggestFeatureFromCache(correctedTitle);
+        if (feature) {
+          lines.push(`Suggested parent: [${feature.id}] ${feature.name} (confidence: ${feature.confidence})`);
+        } else {
+          lines.push("Suggested parent: No match found — please specify manually");
+        }
+
+        const assignee = suggestAssigneeFromCache(correctedTitle);
+        if (assignee) {
+          lines.push(`Suggested assignee: ${assignee.name} (${assignee.reason})`);
+        }
       } else {
-        lines.push("Suggested parent: No match found — please specify manually");
-      }
-
-      if (suggestions.assignee) {
-        lines.push(`Suggested assignee: ${suggestions.assignee.name} (${suggestions.assignee.reason})`);
-      }
-
-      if (suggestions.productTag) {
-        lines.push(`Suggested tag: ${suggestions.productTag}`);
-      }
-
-      if (suggestions.duplicates && suggestions.duplicates.length > 0) {
+        lines.push("[Using static patterns — connect first for live intelligence]");
         lines.push("");
-        lines.push("⚠ Potential duplicates found:");
-        for (const d of suggestions.duplicates) {
-          lines.push(`  [${d.id}] ${d.title}`);
+
+        const suggestions = await getSuggestions(client, correctedTitle, project);
+        if (suggestions.parentFeature) {
+          lines.push(`Suggested parent: [${suggestions.parentFeature.id}] ${suggestions.parentFeature.name} (confidence: ${suggestions.parentFeature.confidence})`);
+        } else {
+          lines.push("Suggested parent: No match found — please specify manually");
+        }
+        if (suggestions.assignee) {
+          lines.push(`Suggested assignee: ${suggestions.assignee.name} (${suggestions.assignee.reason})`);
+        }
+      }
+
+      const tag = suggestProductTag(correctedTitle);
+      if (tag) {
+        lines.push(`Suggested tag: ${tag}`);
+      }
+
+      // Always check duplicates live
+      const dupes = await findDuplicates(client, correctedTitle, project);
+      if (dupes.length > 0) {
+        lines.push("");
+        lines.push("Potential duplicates found:");
+        for (const d of dupes) {
+          lines.push(`  [${d.id}] ${d.title} (${d.state})`);
         }
       }
 
