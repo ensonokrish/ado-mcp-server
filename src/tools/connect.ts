@@ -8,7 +8,7 @@ import {
   deleteProfile,
 } from "../auth/credentials.js";
 import { loadHistoricalData } from "../intelligence/index.js";
-import { getAreaPath, loadConfig } from "../config/index.js";
+import { getAreaPath, loadConfig, setActiveOrg, clearConfigCache } from "../config/index.js";
 
 /** In-memory session state */
 let activeClient: AdoClient | null = null;
@@ -123,6 +123,11 @@ export function registerConnectTools(server: McpServer): void {
       activeClient = client;
       activeOrg = org;
       activeProject = defaultProject || null;
+
+      // Tell config module which org we connected to so it can
+      // skip defaults.json when the org doesn't match.
+      clearConfigCache();
+      setActiveOrg(org);
 
       // Load historical data for intelligence
       let historyStatus = "";

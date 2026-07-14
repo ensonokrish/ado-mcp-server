@@ -28,11 +28,34 @@ export interface AppConfig {
 
 let configCache: AppConfig | null = null;
 
+/** The org that is currently connected — set via setActiveOrg(). */
+let activeOrg: string | null = null;
+
 /**
- * Load config from config/defaults.json.
- * Returns null if file doesn't exist (generic mode — no defaults enforced).
+ * Store the org the user connected to so config helpers can skip
+ * defaults that belong to a different organisation.
  */
-export function loadConfig(): AppConfig | null {
+export function setActiveOrg(org: string): void {
+  activeOrg = org;
+}
+
+/**
+ * Returns true when defaults.json exists AND its organisation matches
+ * the currently-connected org (case-insensitive).  When there is no
+ * match the static config should be ignored — it belongs to another org.
+ */
+function configMatchesActiveOrg(): boolean {
+  const config = loadConfigRaw();
+  if (!config) return false;
+  if (!activeOrg) return true; // no active org yet — allow
+  if (!config.organization) return true; // config has no org — allow
+  return config.organization.toLowerCase() === activeOrg.toLowerCase();
+}
+
+/**
+ * Internal loader — always returns the raw file content (cached).
+ */
+function loadConfigRaw(): AppConfig | null {
   if (configCache) return configCache;
 
   const configPath = path.resolve(process.cwd(), "config", "defaults.json");
@@ -51,7 +74,18 @@ export function loadConfig(): AppConfig | null {
 }
 
 /**
+ * Load config from config/defaults.json.
+ * Returns null if file doesn't exist, can't be parsed, OR
+ * if the connected org doesn't match the org in the config.
+ */
+export function loadConfig(): AppConfig | null {
+  if (!configMatchesActiveOrg()) return null;
+  return loadConfigRaw();
+}
+
+/**
  * Get area path from config, or return undefined for generic usage.
+ * Returns undefined when the connected org doesn't match the config org.
  */
 export function getAreaPath(): string | undefined {
   const config = loadConfig();
