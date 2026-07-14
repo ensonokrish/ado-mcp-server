@@ -1,6 +1,8 @@
 ============================================================
 ADO MCP Server - Setup Guide
 ============================================================
+A generic MCP server for Azure DevOps work item management.
+Works with any ADO organization and project.
 
 Prerequisites
 -------------
@@ -19,64 +21,93 @@ Steps
    npm approve-scripts keytar
    npm run build
 
-3. MCP config is auto-generated
+3. Configure for your organization (optional)
+   Edit config/defaults.json with your org-specific values:
+   - organization, project, board name
+   - area_path (for board scoping)
+   - current_quarter (tags, iteration path)
+   - product_tags (for board swimlanes)
+   - required_fields (for validation)
+
+   If config/defaults.json is removed, the server runs in generic mode
+   with no enforced defaults — works with any ADO org/project.
+
+4. MCP config is auto-generated
    After build, .vscode/mcp.json is auto-created in this repo with the
    correct path. No manual editing needed.
 
-   To install the MCP config into another workspace (e.g., dfin-harness-pipelines):
-   npm run install-mcp -- C:\Repos\dfin-harness-pipelines
+   To install the MCP config into another workspace:
+   npm run install-mcp -- C:\path\to\your\workspace
 
    This auto-detects the server path based on where you cloned the repo.
    If mcp.json already exists in the target, it merges without overwriting.
 
-4. Generate an ADO PAT
-   - Go to https://dev.azure.com/DFIN/_usersSettings/tokens
+5. Generate an ADO PAT
+   - Go to https://dev.azure.com/<your-org>/_usersSettings/tokens
    - Create token with scopes:
      - Work Items: Read, Write, Manage
      - Project and Team: Read
 
-5. First connection (one-time)
+6. First connection (one-time)
    Run the interactive setup wizard:
 
    npm run first-connect
 
    It will prompt you for:
-     1. Organization name   - e.g., 'DFIN'
+     1. Organization name   - your ADO org (e.g., 'DFIN', 'Contoso')
      2. Personal Access Token - your ADO PAT
-     3. Default project      - e.g., 'SRE Operations and BAU'
-     4. Profile name         - e.g., 'dfin' (used to reconnect later)
+     3. Default project      - your ADO project name
+     4. Profile name         - a short name to recall later (e.g., 'myorg')
 
    Credentials are saved to your system keychain.
    PAT never needs to be entered again.
 
-6. Use in VS Code Chat
+7. Use in VS Code Chat
    - Ctrl+Shift+P -> "MCP: List Servers" -> Start ado-mcp-server
    - In chat, first connect to ADO:
-     "connect with profile dfin"
+     "connect with profile <your-profile>"
    - Then you can query, create, update work items:
      "show my work items"
      "create a story for..."
-     "close ticket 487834"
+     "close ticket 12345"
 
-   NOTE: You must run "connect with profile dfin" once per chat session.
+   NOTE: You must run "connect with profile <name>" once per chat session.
    The MCP server needs to authenticate before any other tool will work.
    If you get "Not connected" errors, run connect again.
 
+8. Disconnect
+   In chat: "disconnect"
+   Or from terminal: npm run disconnect
+
 ============================================================
-Available Tools
+Available Commands
+============================================================
+
+npm run build          Build TypeScript to dist/
+npm run start          Start MCP server (stdio)
+npm run dev            Start in development mode (ts-node)
+npm run setup          Regenerate .vscode/mcp.json
+npm run install-mcp    Install MCP config to another workspace
+npm run first-connect  Interactive first-time connection wizard
+npm run disconnect     Disconnect active session
+
+============================================================
+Available Tools (in chat)
 ============================================================
 
 Tool                 Description
 ----                 -----------
 connect              Authenticate (profile or explicit credentials)
 list_profiles        Show saved profiles
-my_work_items        Get items assigned to you
+my_work_items        Get items assigned to you (asks type first)
 query_work_items     Run WIQL queries
 get_work_item        Get item details by ID
-create_work_item     Create new items
+create_work_item     Create new items (validates required fields)
 update_work_item     Update existing items
 get_work_item_types  List available types
 get_iterations       List sprints
+list_features        Dynamically fetch active features/epics
+suggest_defaults     AI-powered suggestions (parent, assignee, duplicates)
 disconnect           End session
 
 ============================================================
@@ -84,32 +115,48 @@ Notes
 ============================================================
 - PAT is stored in your system keychain (Windows Credential Manager)
 - No secrets are stored in files
-- After first connection, use profile_name=dfin to reconnect
+- After first connection, use profile_name to reconnect
 - Multi-project support: pass project parameter to any tool
+- Multi-profile support: save different orgs/projects as profiles
 
 ============================================================
 Configuration (config/defaults.json)
 ============================================================
 All team defaults are stored in config/defaults.json:
-- Quarter tag, iteration path, area path
-- Feature IDs for parent linking
-- Product tags and required fields
+- organization, project, board, area_path
+- current_quarter (tag, iteration path)
+- product_tags (board swimlane grouping)
+- required_fields (validation rules)
+
+This file is OPTIONAL. Without it, the server works generically.
+With it, the server enforces your team's conventions automatically.
 
 When a new quarter starts:
 1. Update current_quarter (name, year, quarter_tag, iteration_path)
-2. Update features and epics with new Q4 IDs
-3. Commit and push — everyone gets the new defaults automatically
+2. Commit and push — everyone gets the new defaults
 
-These defaults are auto-applied when creating work items via chat.
+============================================================
+Intelligence Features
+============================================================
+On connect, the server loads:
+- Active features/epics from your board
+- Last 90 days of work items
+- Team member assignment patterns
+
+This enables:
+- Auto-suggest parent feature based on title
+- Auto-suggest assignee based on historical patterns
+- Duplicate detection before creating items
+- Spell-check on all titles (auto-corrects common typos)
 
 ============================================================
 Security Posture
 ============================================================
-Designed security-first for regulated financial services (DFIN).
+Designed security-first — appropriate for regulated environments.
 
 1. OS Keychain Credentials
-   PAT stored exclusively in Windows Credential Manager (via keytar).
-   Never written to disk, environment variables, or logs.
+   PAT stored exclusively in OS keychain (Windows Credential Manager
+   or macOS Keychain). Never written to disk, env vars, or logs.
    Only the last 4 characters are ever displayed in audit logs.
 
 2. Prompt-Injection Defence

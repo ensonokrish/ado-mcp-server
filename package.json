@@ -11,7 +11,8 @@
     "clean": "rimraf dist",
     "setup": "node scripts/setup-mcp.js",
     "install-mcp": "node scripts/install-mcp.js",
-    "first-connect": "node scripts/first-connect.js"
+    "first-connect": "node scripts/first-connect.js",
+    "disconnect": "node scripts/disconnect.js"
   },
   "keywords": [
     "mcp",
