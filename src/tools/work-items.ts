@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { getActiveClient } from "./connect.js";
+import { getActiveClient, getActiveContext } from "./connect.js";
 import { scrubToolResponse, logAudit } from "../security/index.js";
-import { spellCheck, isCacheLoaded, suggestFeatureFromCache, suggestAssigneeFromCache, suggestProductTag, findDuplicates, getDetectedProductTags, getDetectedIteration } from "../intelligence/index.js";
-import { getStoryType } from "../config/index.js";
+import { spellCheck, isCacheLoaded, suggestFeatureFromCache, suggestAssigneeFromCache, suggestProductTag, findDuplicates, getDetectedProductTags, getDetectedIteration, getDetectedAreaPath } from "../intelligence/index.js";
+import { getStoryType, getAreaPath } from "../config/index.js";
 
 function requireClient() {
   const client = getActiveClient();
@@ -11,6 +11,17 @@ function requireClient() {
     throw new Error("Not connected. Call 'connect' first.");
   }
   return client;
+}
+
+/**
+ * Build the web URL for a work item (not the API URL).
+ */
+function getWebUrl(id: number): string {
+  const ctx = getActiveContext();
+  if (ctx.org && ctx.project) {
+    return `https://dev.azure.com/${ctx.org}/${encodeURIComponent(ctx.project)}/_workitems/edit/${id}`;
+  }
+  return `Work item ${id}`;
 }
 
 function formatWorkItem(wi: { id: number; fields: Record<string, unknown> }): string {
@@ -25,6 +36,7 @@ function formatWorkItem(wi: { id: number; fields: Record<string, unknown> }): st
     `Iteration Path: ${f["System.IterationPath"] || ""}`,
     `Created: ${f["System.CreatedDate"] || ""}`,
     `Changed: ${f["System.ChangedDate"] || ""}`,
+    `URL: ${getWebUrl(wi.id)}`,
   ];
 
   if (f["System.Description"]) {
@@ -144,11 +156,17 @@ export function registerWorkItemTools(server: McpServer): void {
       if (product_name) fields["Custom.ProductName"] = product_name;
       if (requestor) fields["Custom.Requestor"] = requestor;
       if (assigned_to) fields["System.AssignedTo"] = assigned_to;
-      if (area_path) fields["System.AreaPath"] = area_path;
-      if (iteration_path) fields["System.IterationPath"] = iteration_path;
       if (state) fields["System.State"] = state;
       if (priority) fields["Microsoft.VSTS.Common.Priority"] = priority;
       if (tags) fields["System.Tags"] = tags;
+
+      // Auto-apply area_path from detected config or use explicit value
+      const resolvedAreaPath = area_path || getAreaPath() || getDetectedAreaPath();
+      if (resolvedAreaPath) fields["System.AreaPath"] = resolvedAreaPath;
+
+      // Auto-apply iteration_path from detected current sprint or use explicit value
+      const resolvedIterPath = iteration_path || getDetectedIteration()?.path;
+      if (resolvedIterPath) fields["System.IterationPath"] = resolvedIterPath;
 
       const startTime = Date.now();
       try {
@@ -192,7 +210,7 @@ export function registerWorkItemTools(server: McpServer): void {
           content: [
             {
               type: "text" as const,
-              text: `Work item created successfully!${spellNote}\n\n${formatWorkItem(wi)}${parent_id ? `\n\nLinked to parent: ${parent_id}` : ""}\n\nURL: ${wi.url}`,
+              text: `Work item created successfully!${spellNote}\n\n${formatWorkItem(wi)}${parent_id ? `\n\nLinked to parent: ${parent_id}` : ""}\n\nURL: ${getWebUrl(wi.id)}`,
             },
           ],
         };

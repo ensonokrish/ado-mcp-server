@@ -38,6 +38,7 @@ interface HistoricalCache {
   assigneePatterns: AssigneeStats[];
   productTags: string[];
   currentIteration: { name: string; path: string } | null;
+  areaPath: string | null;
 }
 
 let cache: HistoricalCache = {
@@ -48,6 +49,7 @@ let cache: HistoricalCache = {
   assigneePatterns: [],
   productTags: [],
   currentIteration: null,
+  areaPath: null,
 };
 
 export function getCache(): HistoricalCache {
@@ -193,6 +195,7 @@ export async function loadHistoricalData(client: AdoClient, project?: string): P
       assigneePatterns,
       productTags,
       currentIteration,
+      areaPath,
     };
 
     return `Loaded ${features.length} features, ${recentItems.length} recent items, ${assigneePatterns.length} team members`;
@@ -270,4 +273,11 @@ export function getDetectedProductTags(): string[] {
  */
 export function getDetectedIteration(): { name: string; path: string } | null {
   return cache.currentIteration;
+}
+
+/**
+ * Get the area path used by the intelligence cache.
+ */
+export function getDetectedAreaPath(): string | null {
+  return cache.areaPath;
 }
