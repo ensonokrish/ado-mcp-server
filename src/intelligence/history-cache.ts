@@ -101,6 +101,7 @@ export async function loadHistoricalData(client: AdoClient, project?: string): P
     );
 
     let recentItems: HistoricalItem[] = [];
+    const areaPaths: string[] = [];
     if (recentResult.workItems.length > 0) {
       const ids = recentResult.workItems.map((wi) => wi.id).slice(0, 200);
       const items = await client.getWorkItems(ids, project, [
@@ -110,19 +111,32 @@ export async function loadHistoricalData(client: AdoClient, project?: string): P
         "System.State",
         "System.Tags",
         "System.BoardColumn",
+        "System.AreaPath",
       ]);
 
-      recentItems = items.map((wi) => ({
-        id: wi.id,
-        title: (wi.fields["System.Title"] as string) || "",
-        assignee: (wi.fields["System.AssignedTo"] as { displayName?: string })?.displayName || "Unassigned",
-        state: (wi.fields["System.State"] as string) || "",
-        tags: (wi.fields["System.Tags"] as string) || "",
-        boardColumn: (wi.fields["System.BoardColumn"] as string) || "",
-      }));
+      recentItems = items.map((wi) => {
+        const ap = (wi.fields["System.AreaPath"] as string) || "";
+        if (ap && ap !== project) areaPaths.push(ap);
+        return {
+          id: wi.id,
+          title: (wi.fields["System.Title"] as string) || "",
+          assignee: (wi.fields["System.AssignedTo"] as { displayName?: string })?.displayName || "Unassigned",
+          state: (wi.fields["System.State"] as string) || "",
+          tags: (wi.fields["System.Tags"] as string) || "",
+          boardColumn: (wi.fields["System.BoardColumn"] as string) || "",
+        };
+      });
     }
 
-    // 3. Build assignee patterns from historical data
+    // 3. Detect most common area path from recent items
+    const areaPathFreq: Record<string, number> = {};
+    for (const ap of areaPaths) {
+      areaPathFreq[ap] = (areaPathFreq[ap] || 0) + 1;
+    }
+    const detectedAreaPath = Object.entries(areaPathFreq)
+      .sort((a, b) => b[1] - a[1])[0]?.[0] || areaPath;
+
+    // 4. Build assignee patterns from historical data
     const assigneeMap: Record<string, { count: number; titles: string[] }> = {};
     for (const item of recentItems) {
       if (item.assignee && item.assignee !== "Unassigned") {
@@ -195,7 +209,7 @@ export async function loadHistoricalData(client: AdoClient, project?: string): P
       assigneePatterns,
       productTags,
       currentIteration,
-      areaPath,
+      areaPath: detectedAreaPath,
     };
 
     return `Loaded ${features.length} features, ${recentItems.length} recent items, ${assigneePatterns.length} team members`;
