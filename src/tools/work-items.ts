@@ -196,21 +196,34 @@ export function registerWorkItemTools(server: McpServer): void {
           }
         }
 
-        const wi = await client.createWorkItem(type, fields, project, parent_id);
+        // Auto-suggest parent feature if not explicitly provided
+        let resolvedParentId = parent_id;
+        if (!resolvedParentId && isCacheLoaded()) {
+          const suggested = suggestFeatureFromCache(checkedTitle, tags);
+          if (suggested && (suggested.confidence === "high" || suggested.confidence === "medium")) {
+            resolvedParentId = suggested.id;
+          }
+        }
+
+        const wi = await client.createWorkItem(type, fields, project, resolvedParentId);
 
         logAudit({
           timestamp: new Date().toISOString(),
           tool: "create_work_item",
-          arguments: { type, title, project, assigned_to, tags, parent_id },
+          arguments: { type, title, project, assigned_to, tags, parent_id: resolvedParentId },
           success: true,
           durationMs: Date.now() - startTime,
         });
+
+        const parentNote = resolvedParentId
+          ? `\n\nLinked to parent: ${resolvedParentId}${!parent_id ? " (auto-detected)" : ""}`
+          : "";
 
         return {
           content: [
             {
               type: "text" as const,
-              text: `Work item created successfully!${spellNote}\n\n${formatWorkItem(wi)}${parent_id ? `\n\nLinked to parent: ${parent_id}` : ""}\n\nURL: ${getWebUrl(wi.id)}`,
+              text: `Work item created successfully!${spellNote}\n\n${formatWorkItem(wi)}${parentNote}\n\nURL: ${getWebUrl(wi.id)}`,
             },
           ],
         };

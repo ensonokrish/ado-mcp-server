@@ -219,28 +219,72 @@ export async function loadHistoricalData(client: AdoClient, project?: string): P
 }
 
 /**
- * Suggest parent feature by matching title against active features.
+ * Suggest parent feature by matching title (and optional tags) against active features.
+ * Uses multi-signal scoring: product tag match, keyword overlap, specificity.
  */
-export function suggestFeatureFromCache(title: string): { id: number; name: string; confidence: string } | undefined {
+export function suggestFeatureFromCache(
+  title: string,
+  tags?: string
+): { id: number; name: string; confidence: string } | undefined {
   const lowerTitle = title.toLowerCase();
+  const lowerTags = (tags || "").toLowerCase();
 
-  // First try: exact keyword match against feature titles
+  // Known product identifiers to boost matching
+  const productKeywords = cache.productTags
+    .filter((t) => t.length <= 10) // short tags are likely product names (AD, GAIL, AWS)
+    .map((t) => t.toLowerCase());
+
+  // Score each feature
+  const scored: { feature: FeatureInfo; score: number }[] = [];
+  const stopWords = new Set(["the", "and", "for", "from", "with", "all", "new", "fix", "add", "create", "update", "addressing", "management", "engineering", "support", "continuous", "ktlo"]);
+
   for (const feature of cache.features) {
-    const featureWords = feature.title.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
-    const matchCount = featureWords.filter((w) => lowerTitle.includes(w)).length;
-    if (matchCount >= 2) {
-      return { id: feature.id, name: feature.title, confidence: "high" };
+    let score = 0;
+    const featureLower = feature.title.toLowerCase();
+    const featureWords = featureLower.split(/[\s\-—/]+/).filter((w) => w.length > 2 && !stopWords.has(w));
+
+    // Signal 1: Product tag in both title/tags AND feature title (strong signal)
+    for (const pk of productKeywords) {
+      const inStory = lowerTitle.includes(pk) || lowerTags.includes(pk);
+      const inFeature = featureLower.includes(pk);
+      if (inStory && inFeature) {
+        score += 10; // Strong: same product
+      }
+    }
+
+    // Signal 2: Direct keyword overlap (weighted by word length/specificity)
+    for (const word of featureWords) {
+      if (lowerTitle.includes(word)) {
+        score += word.length > 5 ? 4 : 2; // Longer words = more specific
+      }
+    }
+
+    // Signal 3: Story words found in feature (reverse check)
+    const storyWords = lowerTitle.split(/[\s\-—/]+/).filter((w) => w.length > 3 && !stopWords.has(w));
+    for (const word of storyWords) {
+      if (featureLower.includes(word) && !featureWords.includes(word)) {
+        score += word.length > 5 ? 3 : 1;
+      }
+    }
+
+    if (score > 0) {
+      scored.push({ feature, score });
     }
   }
 
-  // Second try: single strong keyword match
-  for (const feature of cache.features) {
-    const featureWords = feature.title.toLowerCase().split(/\s+/).filter((w) => w.length > 4);
-    for (const word of featureWords) {
-      if (lowerTitle.includes(word) && !["management", "engineering", "support"].includes(word)) {
-        return { id: feature.id, name: feature.title, confidence: "medium" };
-      }
-    }
+  // Sort by score descending
+  scored.sort((a, b) => b.score - a.score);
+
+  if (scored.length === 0) return undefined;
+
+  const best = scored[0];
+  // Determine confidence based on score
+  if (best.score >= 14) {
+    return { id: best.feature.id, name: best.feature.title, confidence: "high" };
+  } else if (best.score >= 8) {
+    return { id: best.feature.id, name: best.feature.title, confidence: "medium" };
+  } else if (best.score >= 4) {
+    return { id: best.feature.id, name: best.feature.title, confidence: "low" };
   }
 
   return undefined;
