@@ -13,6 +13,7 @@ export interface WorkItem {
   id: number;
   rev: number;
   fields: Record<string, unknown>;
+  relations?: { rel: string; url: string; attributes?: unknown }[];
   url: string;
 }
 
@@ -201,6 +202,24 @@ export class AdoClient {
     );
 
     if (parentId) {
+      // First check if there's an existing parent to remove
+      const existing = await this.request<WorkItem>(
+        `${proj}/_apis/wit/workitems/${id}`,
+        { query: { "$expand": "relations" } }
+      );
+
+      if (existing.relations) {
+        const parentIdx = (existing.relations as { rel: string }[]).findIndex(
+          (r) => r.rel === "System.LinkTypes.Hierarchy-Reverse"
+        );
+        if (parentIdx >= 0) {
+          patchDoc.push({
+            op: "remove",
+            path: `/relations/${parentIdx}`,
+          });
+        }
+      }
+
       patchDoc.push({
         op: "add",
         path: "/relations/-",
