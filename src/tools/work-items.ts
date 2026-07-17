@@ -266,6 +266,7 @@ export function registerWorkItemTools(server: McpServer): void {
       area_path: z.string().optional().describe("New area path"),
       tags: z.string().optional().describe("New tags (semicolon-separated)"),
       comment: z.string().optional().describe("Add a discussion comment"),
+      parent_id: z.number().optional().describe("Link to a parent work item by ID"),
     },
     async ({
       id,
@@ -279,6 +280,7 @@ export function registerWorkItemTools(server: McpServer): void {
       area_path,
       tags,
       comment,
+      parent_id,
     }) => {
       const client = requireClient();
       const fields: Record<string, unknown> = {};
@@ -293,7 +295,7 @@ export function registerWorkItemTools(server: McpServer): void {
       if (tags) fields["System.Tags"] = tags;
       if (comment) fields["System.History"] = comment;
 
-      if (Object.keys(fields).length === 0) {
+      if (Object.keys(fields).length === 0 && !parent_id) {
         return {
           content: [
             { type: "text" as const, text: "No fields to update. Provide at least one field." },
@@ -302,7 +304,7 @@ export function registerWorkItemTools(server: McpServer): void {
       }
 
       try {
-        const wi = await client.updateWorkItem(id, fields, project);
+        const wi = await client.updateWorkItem(id, fields, project, parent_id);
         return {
           content: [
             {

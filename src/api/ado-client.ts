@@ -188,7 +188,8 @@ export class AdoClient {
   async updateWorkItem(
     id: number,
     fields: Record<string, unknown>,
-    project?: string
+    project?: string,
+    parentId?: number
   ): Promise<WorkItem> {
     const proj = this.resolveProject(project);
     const patchDoc: PatchOperation[] = Object.entries(fields).map(
@@ -198,6 +199,18 @@ export class AdoClient {
         value,
       })
     );
+
+    if (parentId) {
+      patchDoc.push({
+        op: "add",
+        path: "/relations/-",
+        value: {
+          rel: "System.LinkTypes.Hierarchy-Reverse",
+          url: `${this.baseUrl}/_apis/wit/workitems/${parentId}`,
+          attributes: { comment: "Parent link" },
+        },
+      });
+    }
 
     return this.request<WorkItem>(
       `${proj}/_apis/wit/workitems/${id}`,
