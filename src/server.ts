@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerConnectTools } from "./tools/connect.js";
 import { registerWorkItemTools } from "./tools/work-items.js";
 import { registerQueryTools } from "./tools/queries.js";
+import { registerGithubTools } from "./tools/github-import.js";
 
 export function createServer(): McpServer {
   const server = new McpServer({
@@ -13,6 +14,7 @@ export function createServer(): McpServer {
   registerConnectTools(server);
   registerWorkItemTools(server);
   registerQueryTools(server);
+  registerGithubTools(server);
 
   return server;
 }

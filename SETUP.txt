@@ -77,27 +77,96 @@ npm run start          Start MCP server (stdio)
 npm run dev            Start in development mode (ts-node)
 npm run setup          Regenerate .vscode/mcp.json
 npm run install-mcp    Install MCP config to another workspace
-npm run first-connect  Interactive first-time connection wizard
+npm run first-connect  Interactive first-time ADO connection wizard
+npm run connect-github Save GitHub PAT to keychain (masked input, never touches LLM)
 npm run disconnect     Disconnect active session
 
 ============================================================
 Available Tools (in chat)
 ============================================================
 
-Tool                 Description
-----                 -----------
-connect              Authenticate (profile or explicit credentials)
-list_profiles        Show saved profiles
-my_work_items        Get items assigned to you (asks type first)
-query_work_items     Run WIQL queries
-get_work_item        Get item details by ID
-create_work_item     Create new items (validates required fields)
-update_work_item     Update existing items
-get_work_item_types  List available types
-get_iterations       List sprints
-list_features        Dynamically fetch active features/epics
-suggest_defaults     AI-powered suggestions (parent, assignee, duplicates)
-disconnect           End session
+Tool                        Description
+----                        -----------
+connect                     Authenticate (profile or explicit credentials)
+list_profiles               Show saved profiles
+my_work_items               Get items assigned to you (asks type first)
+query_work_items            Run WIQL queries
+get_work_item               Get item details by ID
+create_work_item            Create new items (validates required fields)
+update_work_item            Update existing items
+get_work_item_types         List available types
+get_iterations              List sprints
+list_features               Dynamically fetch active features/epics
+suggest_defaults            AI-powered suggestions (parent, assignee, duplicates)
+disconnect                  End session
+
+GitHub Import Tools
+-------------------
+connect_github              Authenticate with GitHub PAT (saved to keychain)
+list_github_projects        List all Projects v2 boards for a GitHub org
+list_github_issues          List issues from a GitHub repository
+list_github_project_items   List items from a GitHub Projects v2 board
+import_github_issue         Import a GitHub issue into ADO as a work item
+
+============================================================
+GitHub Import Usage
+============================================================
+
+1. Create a GitHub Personal Access Token (one-time)
+   a. Go to https://github.com/settings/tokens
+   b. Click "Generate new token" → "Generate new token (classic)"
+   c. Give it a name (e.g., "ado-mcp-server")
+   d. Set expiration as needed
+   e. Select these scopes:
+        - repo → read:org    (to read org-level project boards)
+        - read:project       (for GitHub Projects v2)
+   f. Click "Generate token" and copy it (shown only once)
+
+   Fine-grained token alternative:
+   a. Go to https://github.com/settings/personal-access-tokens/new
+   b. Set repository access to the repos you want to import from
+   c. Under "Permissions" select:
+        - Issues: Read-only
+        - Projects: Read-only
+   d. Generate and copy the token
+
+2. Save your GitHub token to the keychain (one-time, run in terminal)
+
+   npm run connect-github
+
+   This wizard prompts for your token with masked input (shows * only),
+   verifies it against the GitHub API, then saves it to Windows Credential
+   Manager. The token never passes through the LLM.
+
+3. Connect in VS Code chat (once per session)
+   In chat: "connect_github"
+   No token needed — loaded silently from keychain.
+
+2. Browse GitHub issues before importing
+   "list github issues for owner: myorg repo: myrepo"
+   "list github issues for owner: myorg repo: myrepo label: bug state: open"
+
+3. Browse a GitHub Projects v2 board
+   "list github project items for owner: myorg project_number: 5"
+   (project_number is the number in the URL: github.com/orgs/myorg/projects/5)
+
+4. Preview an import (no ADO item created)
+   "import github issue owner: myorg repo: myrepo issue_number: 42 preview_only: true"
+   Review mapped fields — title, description, labels → tags, assignee.
+
+5. Import to ADO (prompts for ADO fields)
+   "import github issue owner: myorg repo: myrepo issue_number: 42
+    assigned_to: Vanapilli Dinesh
+    area_path: SRE Operations and BAU\Cloud Operations\Ops\Ensono - AD
+    iteration_path: SRE Operations and BAU\2026\Ensono SRE\Q3
+    tags: AD; 2026 - Q3 - SRE
+    parent_id: 485377"
+
+   All ADO field overrides are optional — only title and description
+   are auto-mapped from GitHub. All other fields must be provided.
+
+   NOTE: You must be connected to both ADO (connect) and GitHub
+   (connect_github) before importing.
 
 ============================================================
 Notes

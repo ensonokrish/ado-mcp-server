@@ -83,3 +83,15 @@ export async function deleteProfile(profileName: string): Promise<boolean> {
   const patDeleted = await keytar.deletePassword(SERVICE_NAME, `pat:${profileName}`);
   return metaDeleted || patDeleted;
 }
+
+export async function saveGithubToken(token: string): Promise<void> {
+  await keytar.setPassword(SERVICE_NAME, "github:token", token);
+}
+
+export async function getGithubToken(): Promise<string | null> {
+  return keytar.getPassword(SERVICE_NAME, "github:token");
+}
+
+export async function deleteGithubToken(): Promise<boolean> {
+  return keytar.deletePassword(SERVICE_NAME, "github:token");
+}
