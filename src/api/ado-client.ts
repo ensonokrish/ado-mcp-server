@@ -190,7 +190,7 @@ export class AdoClient {
     id: number,
     fields: Record<string, unknown>,
     project?: string,
-    parentId?: number
+    parentId?: number | null
   ): Promise<WorkItem> {
     const proj = this.resolveProject(project);
     const patchDoc: PatchOperation[] = Object.entries(fields).map(
@@ -201,7 +201,7 @@ export class AdoClient {
       })
     );
 
-    if (parentId) {
+    if (parentId !== undefined) {
       // First check if there's an existing parent to remove
       const existing = await this.request<WorkItem>(
         `${proj}/_apis/wit/workitems/${id}`,
@@ -220,15 +220,17 @@ export class AdoClient {
         }
       }
 
-      patchDoc.push({
-        op: "add",
-        path: "/relations/-",
-        value: {
-          rel: "System.LinkTypes.Hierarchy-Reverse",
-          url: `${this.baseUrl}/_apis/wit/workitems/${parentId}`,
-          attributes: { comment: "Parent link" },
-        },
-      });
+      if (parentId !== null) {
+        patchDoc.push({
+          op: "add",
+          path: "/relations/-",
+          value: {
+            rel: "System.LinkTypes.Hierarchy-Reverse",
+            url: `${this.baseUrl}/_apis/wit/workitems/${parentId}`,
+            attributes: { comment: "Parent link" },
+          },
+        });
+      }
     }
 
     return this.request<WorkItem>(

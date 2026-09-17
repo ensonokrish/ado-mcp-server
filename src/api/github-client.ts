@@ -9,6 +9,28 @@ export interface GithubProject {
   itemCount: number;
 }
 
+export interface GithubProjectField {
+  id: string;
+  name: string;
+  dataType: string;
+  options: { id: string; name: string }[];
+}
+
+export interface GithubProjectContext {
+  id: string;
+  number: number;
+  title: string;
+  url: string;
+  fields: GithubProjectField[];
+}
+
+export interface GithubProjectIteration {
+  id: string;
+  title: string;
+  startDate: string | null;
+  duration: number;
+}
+
 export interface GithubIssue {
   number: number;
   title: string;
@@ -33,6 +55,13 @@ export interface GithubProjectItem {
   status: string | null;
   number: number | null;
   type: "ISSUE" | "PULL_REQUEST" | "DRAFT_ISSUE" | string;
+}
+
+export interface CreateGithubIssueInput {
+  title: string;
+  body?: string;
+  labels?: string[];
+  assignees?: string[];
 }
 
 export class GithubClient {
@@ -133,6 +162,169 @@ export class GithubClient {
       throw new Error(`GitHub get issue failed (${res.status}): ${await res.text()}`);
     }
     return res.json() as Promise<GithubIssue>;
+  }
+
+  async createIssue(owner: string, repo: string, input: CreateGithubIssueInput): Promise<GithubIssue> {
+    const res = await fetch(`${this.restBase}/repos/${owner}/${repo}/issues`, {
+      method: "POST",
+      headers: this.headers,
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) throw new Error(`GitHub create issue failed (${res.status}): ${await res.text()}`);
+    return res.json() as Promise<GithubIssue>;
+  }
+
+  async updateIssue(
+    owner: string,
+    repo: string,
+    number: number,
+    input: Partial<CreateGithubIssueInput> & { state?: "open" | "closed" }
+  ): Promise<GithubIssue> {
+    const res = await fetch(`${this.restBase}/repos/${owner}/${repo}/issues/${number}`, {
+      method: "PATCH",
+      headers: this.headers,
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) throw new Error(`GitHub update issue failed (${res.status}): ${await res.text()}`);
+    return res.json() as Promise<GithubIssue>;
+  }
+
+  async findIssueByMigrationKey(owner: string, repo: string, migrationKey: string): Promise<GithubIssue | null> {
+    const params = new URLSearchParams({ q: `repo:${owner}/${repo} "${migrationKey}" in:body`, per_page: "1" });
+    const res = await fetch(`${this.restBase}/search/issues?${params}`, { headers: this.headers });
+    if (!res.ok) throw new Error(`GitHub migration lookup failed (${res.status}): ${await res.text()}`);
+    const data = await res.json() as { items: GithubIssue[] };
+    return data.items[0] ?? null;
+  }
+
+  async getProjectContext(owner: string, projectNumber: number): Promise<GithubProjectContext> {
+    const query = `
+      query($owner: String!, $number: Int!) {
+        organization(login: $owner) {
+          projectV2(number: $number) {
+            id number title url
+            fields(first: 100) {
+              nodes {
+                ... on ProjectV2FieldCommon { id name dataType }
+                ... on ProjectV2SingleSelectField { id name dataType options { id name } }
+              }
+            }
+          }
+        }
+      }
+    `;
+    const json = await this.graphql(query, { owner, number: projectNumber });
+    const project = json.data?.organization?.projectV2;
+    if (!project) throw new Error("Project not found. Check owner name and project number.");
+    return {
+      id: project.id,
+      number: project.number,
+      title: project.title,
+      url: project.url,
+      fields: project.fields.nodes.map((field: { id: string; name: string; dataType: string; options?: { id: string; name: string }[] }) => ({
+        id: field.id,
+        name: field.name,
+        dataType: field.dataType,
+        options: field.options ?? [],
+      })),
+    };
+  }
+
+  async addIssueToProject(projectId: string, issueUrl: string): Promise<string> {
+    const contentId = await this.getNodeId(issueUrl);
+    const mutation = `
+      mutation($projectId: ID!, $contentId: ID!) {
+        addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) { item { id } }
+      }
+    `;
+    const json = await this.graphql(mutation, { projectId, contentId });
+    const itemId = json.data?.addProjectV2ItemById?.item?.id;
+    if (!itemId) throw new Error("GitHub did not return a Project item ID.");
+    return itemId;
+  }
+
+  async setProjectSingleSelectField(projectId: string, itemId: string, fieldId: string, optionId: string): Promise<void> {
+    const mutation = `
+      mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+        updateProjectV2ItemFieldValue(input: {
+          projectId: $projectId
+          itemId: $itemId
+          fieldId: $fieldId
+          value: { singleSelectOptionId: $optionId }
+        }) { projectV2Item { id } }
+      }
+    `;
+    await this.graphql(mutation, { projectId, itemId, fieldId, optionId });
+  }
+
+  async getProjectIterations(owner: string, projectNumber: number): Promise<{ fieldId: string; iterations: GithubProjectIteration[] }> {
+    const query = `
+      query($owner: String!, $number: Int!) {
+        organization(login: $owner) {
+          projectV2(number: $number) {
+            fields(first: 100) {
+              nodes {
+                ... on ProjectV2IterationField {
+                  id
+                  configuration {
+                    iterations { id title startDate duration }
+                    completedIterations { id title startDate duration }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+    const json = await this.graphql(query, { owner, number: projectNumber });
+    const fields = json.data?.organization?.projectV2?.fields?.nodes ?? [];
+    const field = fields.find((candidate: { configuration?: unknown }) => candidate.configuration);
+    if (!field?.id || !field.configuration) throw new Error("This Project has no Iteration field.");
+    return {
+      fieldId: field.id,
+      iterations: [...(field.configuration.iterations ?? []), ...(field.configuration.completedIterations ?? [])],
+    };
+  }
+
+  async setProjectIterationField(projectId: string, itemId: string, fieldId: string, iterationId: string): Promise<void> {
+    const mutation = `
+      mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $iterationId: String!) {
+        updateProjectV2ItemFieldValue(input: {
+          projectId: $projectId
+          itemId: $itemId
+          fieldId: $fieldId
+          value: { iterationId: $iterationId }
+        }) { projectV2Item { id } }
+      }
+    `;
+    await this.graphql(mutation, { projectId, itemId, fieldId, iterationId });
+  }
+
+  private async getNodeId(issueUrl: string): Promise<string> {
+    const query = `
+      query($url: URI!) {
+        resource(url: $url) {
+          ... on Issue { id }
+        }
+      }
+    `;
+    const json = await this.graphql(query, { url: issueUrl });
+    const id = json.data?.resource?.id;
+    if (!id) throw new Error(`Unable to resolve GitHub issue node ID: ${issueUrl}`);
+    return id;
+  }
+
+  private async graphql(query: string, variables: Record<string, unknown>): Promise<any> {
+    const res = await fetch(this.graphqlUrl, {
+      method: "POST",
+      headers: this.headers,
+      body: JSON.stringify({ query, variables }),
+    });
+    if (!res.ok) throw new Error(`GitHub GraphQL failed (${res.status}): ${await res.text()}`);
+    const json = await res.json() as { errors?: { message: string }[] };
+    if (json.errors?.length) throw new Error(`GitHub GraphQL error: ${json.errors[0].message}`);
+    return json;
   }
 
   async listProjectItems(owner: string, projectNumber: number): Promise<GithubProjectItem[]> {

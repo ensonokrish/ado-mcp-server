@@ -8,6 +8,14 @@ export interface AdoProfile {
   defaultProject?: string;
 }
 
+export interface GithubProfile {
+  name: string;
+  organization: string;
+  projectNumber: number;
+  defaultRepository?: string;
+  allowedRepositories?: string[];
+}
+
 interface StoredProfile {
   organization: string;
   defaultProject?: string;
@@ -94,4 +102,34 @@ export async function getGithubToken(): Promise<string | null> {
 
 export async function deleteGithubToken(): Promise<boolean> {
   return keytar.deletePassword(SERVICE_NAME, "github:token");
+}
+
+export async function saveGithubProfile(profile: GithubProfile): Promise<void> {
+  const metadata = {
+    organization: profile.organization,
+    projectNumber: profile.projectNumber,
+    defaultRepository: profile.defaultRepository,
+    allowedRepositories: profile.allowedRepositories,
+  };
+  await keytar.setPassword(SERVICE_NAME, `github:profile:${profile.name}`, JSON.stringify(metadata));
+}
+
+export async function getGithubProfile(name: string): Promise<GithubProfile | null> {
+  const metadataJson = await keytar.getPassword(SERVICE_NAME, `github:profile:${name}`);
+  if (!metadataJson) return null;
+  const metadata = JSON.parse(metadataJson) as Omit<GithubProfile, "name">;
+  return { name, ...metadata };
+}
+
+export async function listGithubProfiles(): Promise<GithubProfile[]> {
+  const credentials = await keytar.findCredentials(SERVICE_NAME);
+  const profiles: GithubProfile[] = [];
+  for (const credential of credentials) {
+    if (credential.account.startsWith("github:profile:")) {
+      const name = credential.account.replace("github:profile:", "");
+      const metadata = JSON.parse(credential.password) as Omit<GithubProfile, "name">;
+      profiles.push({ name, ...metadata });
+    }
+  }
+  return profiles;
 }

@@ -17,16 +17,18 @@ Steps
    cd ado-mcp-server
 
 2. Install dependencies & build
-   npm install
-   npm approve-scripts keytar
-   npm run build
+   make install
+   # or, if you prefer to run the steps manually:
+   # npm install
+   # npm approve-scripts keytar
+   # npm run build
 
 3. MCP config is auto-generated
    After build, .vscode/mcp.json is auto-created in this repo with the
    correct path. No manual editing needed.
 
    To install the MCP config into another workspace:
-   npm run install-mcp -- C:\path\to\your\workspace
+   make install-mcp TARGET="C:\path\to\your\workspace"
 
    This auto-detects the server path based on where you cloned the repo.
    If mcp.json already exists in the target, it merges without overwriting.
@@ -40,7 +42,7 @@ Steps
 5. First connection (one-time)
    Run the interactive setup wizard:
 
-   npm run first-connect
+   make first-connect
 
    It will prompt you for:
      1. Organization name   - your ADO org (e.g., 'DFIN', 'Contoso')
@@ -66,20 +68,20 @@ Steps
 
 7. Disconnect
    In chat: "disconnect"
-   Or from terminal: npm run disconnect
+   Or from terminal: make disconnect
 
 ============================================================
 Available Commands
 ============================================================
 
-npm run build          Build TypeScript to dist/
-npm run start          Start MCP server (stdio)
-npm run dev            Start in development mode (ts-node)
-npm run setup          Regenerate .vscode/mcp.json
-npm run install-mcp    Install MCP config to another workspace
-npm run first-connect  Interactive first-time ADO connection wizard
-npm run connect-github Save GitHub PAT to keychain (masked input, never touches LLM)
-npm run disconnect     Disconnect active session
+make build            Build TypeScript to dist/
+make start            Start MCP server (stdio)
+make dev              Start in development mode (ts-node)
+make setup            Regenerate .vscode/mcp.json
+make install-mcp      Install MCP config to another workspace (use TARGET="C:\path\to\workspace")
+make first-connect    Interactive first-time ADO connection wizard
+make connect-github   Save GitHub PAT to keychain (masked input, never touches LLM)
+make disconnect       Disconnect active session
 
 ============================================================
 Available Tools (in chat)
@@ -103,10 +105,20 @@ disconnect                  End session
 GitHub Import Tools
 -------------------
 connect_github              Authenticate with GitHub PAT (saved to keychain)
+configure_github_profile   Save GitHub organization, Project, and repository defaults
+get_github_project_context Read live Project fields and allowed Status values
 list_github_projects        List all Projects v2 boards for a GitHub org
 list_github_issues          List issues from a GitHub repository
 list_github_project_items   List items from a GitHub Projects v2 board
+create_github_work_item    Create a Task, Story, or Epic and add it to a Project
+update_github_work_item    Edit a GitHub work item and optionally its Project Status
+set_github_work_item_status Move a work item across the Project board
+close_github_work_item     Set Done and close the underlying GitHub issue
+reopen_github_work_item    Reopen an issue and set an active Project Status
 import_github_issue         Import a GitHub issue into ADO as a work item
+preview_ado_to_github_migration  Preview open ADO work items for migration (no writes)
+migrate_ado_to_github       Migrate approved open ADO work items to GitHub Project work
+get_migration_status        Reconcile ADO work items with migrated GitHub issues
 
 ============================================================
 GitHub Import Usage
@@ -118,21 +130,21 @@ GitHub Import Usage
    c. Give it a name (e.g., "ado-mcp-server")
    d. Set expiration as needed
    e. Select these scopes:
-        - repo → read:org    (to read org-level project boards)
-        - read:project       (for GitHub Projects v2)
+      - repo → read:org    (to access organization project boards and repository issues)
+      - project             (read and write GitHub Projects v2)
    f. Click "Generate token" and copy it (shown only once)
 
    Fine-grained token alternative:
    a. Go to https://github.com/settings/personal-access-tokens/new
    b. Set repository access to the repos you want to import from
    c. Under "Permissions" select:
-        - Issues: Read-only
-        - Projects: Read-only
+      - Issues: Read and write
+      - Projects: Read and write
    d. Generate and copy the token
 
 2. Save your GitHub token to the keychain (one-time, run in terminal)
 
-   npm run connect-github
+   make connect-github
 
    This wizard prompts for your token with masked input (shows * only),
    verifies it against the GitHub API, then saves it to Windows Credential
@@ -149,6 +161,42 @@ GitHub Import Usage
 3. Browse a GitHub Projects v2 board
    "list github project items for owner: myorg project_number: 5"
    (project_number is the number in the URL: github.com/orgs/myorg/projects/5)
+
+GitHub Project Work Management
+-------------------------------
+
+1. Configure the Q4 Project profile after connecting GitHub:
+
+   "configure github profile profile_name: ensono-cloudops-q4
+    organization: dfinsolutions project_number: 52
+    default_repository: <approved-repository>
+    allowed_repositories: [<approved-repository>]"
+
+2. Read the live Status values before creating work:
+
+   "get github project context profile_name: ensono-cloudops-q4"
+
+3. Create and manage GitHub-native work items:
+
+   "create github work item title: ... work_type: story status: Backlog"
+   "create github work item title: ... work_type: task parent_issue_number: 123"
+   "set github work item status repo: <approved-repository> issue_number: 123 status: In progress"
+   "close github work item repo: <approved-repository> issue_number: 123"
+
+4. Migrate ADO work only after a reviewable preview:
+
+   "preview ado to github migration work_item_ids: [12345] repo: <approved-repository>"
+   "migrate ado to github work_item_ids: [12345] repo: <approved-repository> confirm: true"
+
+   A filtered preview is also supported and never performs an unbounded scan:
+   "preview ado to github migration iteration_path: <ADO iteration path>
+    work_item_type: Engineering Story repo: <approved-repository>"
+
+   Migration leaves ADO items open by default. Set close_ado_after_migration: true
+   only after GitHub records and board state are verified.
+
+   Parent links are stored as durable Markdown references for compatibility with
+   GitHub Enterprise configurations that do not expose native sub-issue APIs.
 
 4. Preview an import (no ADO item created)
    "import github issue owner: myorg repo: myrepo issue_number: 42 preview_only: true"
