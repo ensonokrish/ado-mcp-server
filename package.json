@@ -8,6 +8,8 @@
     "test": "npm run build && node --test dist/api/github-client.test.js",
     "postbuild": "node scripts/setup-mcp.js",
     "start": "node dist/index.js",
+    "start:github": "node dist/github-index.js",
+    "test:github": "tsc && node --test dist/api/github-client.test.js dist/api/github-work.test.js",
     "dev": "ts-node src/index.ts",
     "clean": "rimraf dist",
     "setup": "node scripts/setup-mcp.js",
