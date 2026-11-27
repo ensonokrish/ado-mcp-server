@@ -488,6 +488,7 @@ export function registerGithubTools(server: McpServer): void {
       body: z.string().max(65536).optional().describe("Markdown description"),
       parent_issue_number: z.number().optional().describe("Parent issue in the same repository; stored as a portable hierarchy reference"),
       status: z.string().optional().default("Backlog").describe("Project Status value"),
+      iteration: z.string().optional().default("@current").describe("Project iteration title, or @current for the active date-based iteration"),
       labels: z.array(z.string()).optional().default([]).describe("Existing GitHub labels"),
       assignees: z.array(z.string()).optional().default([]).describe("Verified GitHub logins"),
       profile_name: z.string().optional().describe("Saved GitHub profile name"),
@@ -495,7 +496,7 @@ export function registerGithubTools(server: McpServer): void {
       project_number: z.number().optional().describe("GitHub Project number override"),
       repo: z.string().optional().describe("Repository for the issue"),
     },
-    async ({ title, work_type, body, parent_issue_number, status, labels, assignees, profile_name, owner, project_number, repo }) => {
+    async ({ title, work_type, body, parent_issue_number, status, iteration, labels, assignees, profile_name, owner, project_number, repo }) => {
       const started = Date.now();
       try {
         const scope = await resolveGithubScope(profile_name, owner, project_number, repo);
@@ -511,10 +512,25 @@ export function registerGithubTools(server: McpServer): void {
         });
         const projectItemId = await client.addIssueToProject(context.id, issue.html_url);
         await client.setProjectSingleSelectField(context.id, projectItemId, selectedStatus.field.id, selectedStatus.option.id);
-        logAudit({ timestamp: new Date().toISOString(), tool: "create_github_work_item", arguments: { title, work_type, parent_issue_number, status, owner: scope.owner, project_number: scope.projectNumber, repo: scope.repo }, success: true, durationMs: Date.now() - started });
-        return { content: [{ type: "text", text: `GitHub work item created and added to Project #${scope.projectNumber}.\n\n${formatGithubIssue(issue, selectedStatus.option.name)}` }] };
+
+        const iterations = await client.getProjectIterations(scope.owner, scope.projectNumber);
+        const selectedIteration = resolveIteration(iterations.iterations, iteration);
+        if (!selectedIteration) {
+          throw new Error(`Iteration '${iteration}' was not found. Available values: ${iterations.iterations.map((candidate) => candidate.title).join(", ") || "none"}.`);
+        }
+        await client.setProjectIterationField(context.id, projectItemId, iterations.fieldId, selectedIteration.id);
+
+        const projectItem = await client.getProjectItem(projectItemId);
+        if (projectItem.projectId !== context.id || projectItem.issueUrl !== issue.html_url) {
+          throw new Error(
+            `GitHub returned Project item '${projectItemId}', but it does not match Project #${scope.projectNumber} and issue #${issue.number}.`
+          );
+        }
+
+        logAudit({ timestamp: new Date().toISOString(), tool: "create_github_work_item", arguments: { title, work_type, parent_issue_number, status, iteration: selectedIteration.title, owner: scope.owner, project_number: scope.projectNumber, repo: scope.repo }, success: true, durationMs: Date.now() - started });
+        return { content: [{ type: "text", text: `GitHub work item created and added to Project #${scope.projectNumber}, iteration ${selectedIteration.title}.\n\n${formatGithubIssue(issue, selectedStatus.option.name)}` }] };
       } catch (err) {
-        logAudit({ timestamp: new Date().toISOString(), tool: "create_github_work_item", arguments: { title, work_type, status, owner, project_number, repo }, success: false, error: (err as Error).message, durationMs: Date.now() - started });
+        logAudit({ timestamp: new Date().toISOString(), tool: "create_github_work_item", arguments: { title, work_type, status, iteration, owner, project_number, repo }, success: false, error: (err as Error).message, durationMs: Date.now() - started });
         return { content: [{ type: "text", text: `Error: ${(err as Error).message}` }] };
       }
     }
