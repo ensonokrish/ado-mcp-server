@@ -243,6 +243,30 @@ export class GithubClient {
     return itemId;
   }
 
+  async getProjectItem(itemId: string): Promise<{ id: string; projectId: string; issueUrl: string | null }> {
+    const query = `
+      query($id: ID!) {
+        node(id: $id) {
+          ... on ProjectV2Item {
+            id
+            project { id }
+            content { ... on Issue { url } }
+          }
+        }
+      }
+    `;
+    const json = await this.graphql(query, { id: itemId });
+    const item = json.data?.node;
+    if (!item?.id || !item.project?.id) {
+      throw new Error(`GitHub Project item '${itemId}' was not found.`);
+    }
+    return {
+      id: item.id,
+      projectId: item.project.id,
+      issueUrl: item.content?.url ?? null,
+    };
+  }
+
   async setProjectSingleSelectField(projectId: string, itemId: string, fieldId: string, optionId: string): Promise<void> {
     const mutation = `
       mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
